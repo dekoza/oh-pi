@@ -901,7 +901,7 @@ export default function usageTracker(pi: ExtensionAPI) {
 
 	// ─── Keyboard shortcut ────────────────────────────────────────────────
 
-	pi.registerShortcut("ctrl+shift+u", {
+	pi.registerShortcut("ctrl+u", {
 		description: "Show usage dashboard (rate limits + costs)",
 		async handler(ctx) {
 			triggerProbe(ctx);
