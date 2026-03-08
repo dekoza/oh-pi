@@ -25,6 +25,20 @@ Goal → Scouting → Task Pool → Workers Execute in Parallel → Soldiers Rev
           └───────────────────────────┘
 ```
 
+## Workspace Isolation (Default)
+
+By default, each colony runs in an **isolated git worktree** on its own branch (`ant-colony/...`).
+This keeps your current branch untouched while the swarm edits code.
+
+If worktree creation is unavailable (e.g. not a git repo), the colony automatically falls back to the shared cwd and
+reports the reason in the final report/status output.
+
+You can disable worktree isolation with:
+
+```bash
+PI_ANT_COLONY_WORKTREE=0
+```
+
 ## Adaptive Concurrency
 
 Models real ant colony dynamic recruitment:
@@ -44,7 +58,11 @@ The LLM automatically invokes the `ant_colony` tool when task complexity warrant
 ### Commands
 
 ```
-/colony-stop                Cancel a running colony
+/colony <goal>              Start a new colony for the given goal
+/colony-count               Show number of currently running colonies
+/colony-status [id]         Show running colonies (runtime cN or stable colony-... ID)
+/colony-stop [id|all]       Cancel one running colony (runtime/stable ID) or all
+/colony-resume [colonyId]   Resume a specific stable colony ID, or all resumable by default
 Ctrl+Shift+A                Open colony details panel
 ```
 
@@ -57,6 +75,11 @@ Ctrl+Shift+A                Open colony details panel
 
 /colony Refactor auth system from session-based to JWT, maintaining API compatibility
 ```
+
+## Usage Tracking Integration
+
+Ant inference usage (tokens + cost) is streamed to the `usage-tracker` extension via `pi.events` (`usage:record`).
+So `/usage`, `usage_report`, and session cost totals now include background colony inference, making colony spend visible.
 
 ## Pheromone System
 
@@ -94,13 +117,17 @@ Each task declares the files it operates on. The queen guarantees:
 ## Installation
 
 ```bash
-# Option 1: Symlink to pi extensions directory
-mkdir -p ~/.pi/agent/extensions/ant-colony
-ln -sf "$(pwd)/pi-package/extensions/ant-colony/index.ts" ~/.pi/agent/extensions/ant-colony/index.ts
-# ... (symlink all .ts files)
+# Install just ant-colony
+pi install npm:@ifi/oh-pi-ant-colony
 
-# Option 2: Install via oh-pi
-npx oh-pi  # Select "Full Power" preset
+# Or install the full oh-pi bundle (includes ant-colony)
+pi install npm:@ifi/oh-pi
+```
+
+Then enable/configure extensions with:
+
+```bash
+npx @ifi/oh-pi-cli
 ```
 
 ## Module Reference
@@ -110,9 +137,10 @@ npx oh-pi  # Select "Full Power" preset
 | `types.ts`       | ~150  | Type system: ants, tasks, pheromones, colony state                         |
 | `nest.ts`        | ~500  | Nest: file-system shared state, atomic R/W, pheromone decay                |
 | `concurrency.ts` | ~120  | Adaptive concurrency: system sampling, exploration/steady-state adjustment |
-| `spawner.ts`     | ~370  | Ant spawning: session management, prompt construction, output parsing      |
-| `queen.ts`       | ~1000 | Queen scheduling: lifecycle, task waves, multi-round iteration             |
-| `index.ts`       | ~900  | Extension entry: tool/shortcut registration, TUI rendering                 |
+| `spawner.ts`     | ~420  | Ant spawning: session lifecycle, usage streaming, prompt/output handling   |
+| `queen.ts`       | ~1020 | Queen scheduling: lifecycle, task waves, multi-round iteration             |
+| `worktree.ts`    | ~180  | Git worktree isolation and resume workspace recovery helpers               |
+| `index.ts`       | ~1050 | Extension entry: tool/shortcut registration, TUI rendering, status signals |
 | `deps.ts`        | ~140  | Lightweight import graph for dependency-aware scheduling                   |
 | `parser.ts`      | ~180  | Sub-task and pheromone extraction from ant output                          |
 | `prompts.ts`     | ~90   | Per-caste system prompts and prompt builder                                |

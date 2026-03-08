@@ -98,7 +98,36 @@ export interface AntStreamEvent {
 	totalText: string; // accumulated text so far
 }
 
+export interface AntUsageEvent {
+	antId: string;
+	caste: AntCaste;
+	taskId: string;
+	provider: string;
+	model: string;
+	usage: {
+		input: number;
+		output: number;
+		cacheRead: number;
+		cacheWrite: number;
+		costTotal: number;
+	};
+}
+
 // ═══ Colony State ═══
+export interface ColonyWorkspace {
+	mode: "shared" | "worktree";
+	/** The original session cwd where the colony was launched. */
+	originCwd: string;
+	/** The cwd where ants actually execute tasks (worktree or shared cwd). */
+	executionCwd: string;
+	repoRoot: string | null;
+	worktreeRoot: string | null;
+	branch: string | null;
+	baseBranch: string | null;
+	/** Optional note (e.g. fallback reason when worktree creation fails). */
+	note: string | null;
+}
+
 export interface ColonyState {
 	id: string;
 	goal: string;
@@ -110,6 +139,8 @@ export interface ColonyState {
 	metrics: ColonyMetrics;
 	maxCost: number | null; // cost budget in USD, null = unlimited
 	modelOverrides: ModelOverrides;
+	/** Execution workspace metadata (shared cwd vs isolated worktree). */
+	workspace?: ColonyWorkspace;
 	createdAt: number;
 	finishedAt: number | null;
 }
@@ -149,4 +180,16 @@ export interface ColonySignal {
 	active: number; // Number of currently active ants
 	cost: number;
 	message: string; // Human-readable status summary
+	colonyId?: string; // Stable persisted colony ID (e.g. colony-lk42...)
+}
+
+export interface DroneCommandPolicy {
+	allowlist: string[];
+	maxArgs: number;
+	maxCommandLength: number;
+}
+
+export interface ColonyRuntimeIdentity {
+	runtimeId: string; // Session-local ID (e.g. c1)
+	stableId: string; // Persisted nest ID (e.g. colony-lk42...)
 }
