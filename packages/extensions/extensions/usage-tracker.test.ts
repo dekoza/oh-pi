@@ -538,6 +538,53 @@ describe("usage-tracker extension", () => {
 			expect(text).toContain("Windows: unavailable");
 		});
 
+		it("classifies Claude API 401 + /login output as auth-required", async () => {
+			pi.exec.mockImplementation(async (cmd: string, args?: string[]) => {
+				if (cmd === "claude" && args?.[0] === "usage") {
+					return {
+						stdout:
+							'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}} Please run /login',
+						exitCode: 1,
+					};
+				}
+				return { stdout: "", exitCode: 0 };
+			});
+
+			usageTracker(pi as any);
+			pi._emit("session_start", { type: "session_start" }, ctx);
+
+			const tool = pi._tools.get("usage_report");
+			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
+			const text = result.content[0].text;
+
+			expect(text).toContain("Claude CLI authentication required or expired; run claude auth login.");
+		});
+
+		it("classifies Codex API 401 + /login output as auth-required", async () => {
+			ctx.model = { id: "gpt-4o" } as any;
+			pi.exec.mockImplementation(async (cmd: string, args?: string[]) => {
+				if (cmd === "codex" && args?.[0] === "login" && args?.[1] === "status") {
+					return { stdout: "Not logged in · Please run /login", exitCode: 1 };
+				}
+				if (cmd === "codex") {
+					return {
+						stdout: "Error: Failed to authenticate. API Error: 401. Please run /login",
+						exitCode: 1,
+					};
+				}
+				return { stdout: "", exitCode: 0 };
+			});
+
+			usageTracker(pi as any);
+			pi._emit("session_start", { type: "session_start" }, ctx);
+
+			const tool = pi._tools.get("usage_report");
+			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
+			const text = result.content[0].text;
+
+			expect(text).toContain("Codex CLI authentication required; run codex login.");
+		});
+
 		it("shows codex note when windows need an interactive TTY", async () => {
 			ctx.model = { id: "gpt-4o" } as any;
 			pi.exec.mockImplementation(async (cmd: string, args?: string[]) => {

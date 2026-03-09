@@ -548,12 +548,28 @@ function hasProviderDisplayData(rl: ProviderRateLimits): boolean {
 	return rl.windows.length > 0 || rl.credits !== null || Boolean(rl.account || rl.plan || rl.note || rl.error);
 }
 
+function includesAny(haystack: string, needles: string[]): boolean {
+	for (const needle of needles) {
+		if (haystack.includes(needle)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 function classifyClaudeUsageOutput(text: string): { error?: string; note?: string } {
 	const lower = text.toLowerCase();
 	if (
-		lower.includes("not logged in") ||
-		lower.includes("authentication_error") ||
-		lower.includes("token has expired")
+		includesAny(lower, [
+			"not logged in",
+			"authentication_error",
+			"token has expired",
+			"oauth token has expired",
+			"api error: 401",
+			"invalid authentication credentials",
+			"please run /login",
+			"failed to authenticate",
+		])
 	) {
 		return { error: "Claude CLI authentication required or expired; run claude auth login." };
 	}
@@ -568,14 +584,24 @@ function classifyClaudeUsageOutput(text: string): { error?: string; note?: strin
 
 function classifyCodexUsageOutput(text: string): { error?: string; note?: string } {
 	const lower = text.toLowerCase();
+	if (
+		includesAny(lower, [
+			"not logged in",
+			"login required",
+			"api error: 401",
+			"invalid authentication credentials",
+			"please run /login",
+			"failed to authenticate",
+			"oauth token has expired",
+		])
+	) {
+		return { error: "Codex CLI authentication required; run codex login." };
+	}
 	if (lower.includes("stdin is not a terminal")) {
 		return { note: "Codex rate-limit windows require an interactive TTY in this environment." };
 	}
 	if (lower.includes("operation not permitted")) {
 		return { note: "Codex CLI usage probing is blocked by local OS permissions in this environment." };
-	}
-	if (lower.includes("not logged in") || lower.includes("login required")) {
-		return { error: "Codex CLI authentication required; run codex login." };
 	}
 	return {};
 }
