@@ -856,9 +856,32 @@ function ensureCtrlUUnbound(): void {
 		if (existsSync(keybindingsPath)) {
 			config = JSON.parse(readFileSync(keybindingsPath, "utf-8"));
 		}
-		// Only write if deleteToLineStart isn't already configured
-		if (!("deleteToLineStart" in config)) {
+
+		let shouldWrite = false;
+		const existing = config.deleteToLineStart;
+
+		if (existing === undefined) {
+			// Explicitly set [] so built-in default ctrl+u does not conflict.
 			config.deleteToLineStart = [];
+			shouldWrite = true;
+		} else if (Array.isArray(existing)) {
+			const filtered = existing.filter((binding) => {
+				if (typeof binding !== "string") {
+					return true;
+				}
+				return binding.trim().toLowerCase() !== "ctrl+u";
+			});
+			if (filtered.length !== existing.length) {
+				config.deleteToLineStart = filtered;
+				shouldWrite = true;
+			}
+		} else {
+			// Malformed config; normalize to an explicit empty binding list.
+			config.deleteToLineStart = [];
+			shouldWrite = true;
+		}
+
+		if (shouldWrite) {
 			writeFileSync(keybindingsPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
 		}
 	} catch {

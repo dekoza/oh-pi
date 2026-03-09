@@ -891,7 +891,7 @@ describe("usage-tracker extension", () => {
 			);
 		});
 
-		it("does not overwrite keybindings.json when deleteToLineStart is already configured", () => {
+		it("does not overwrite keybindings.json when deleteToLineStart is configured without ctrl+u", () => {
 			(existsSync as ReturnType<typeof vi.fn>).mockReturnValue(true);
 			(readFileSync as ReturnType<typeof vi.fn>).mockReturnValue('{"deleteToLineStart": ["ctrl+shift+u"]}');
 
@@ -903,6 +903,23 @@ describe("usage-tracker extension", () => {
 				(c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("keybindings.json"),
 			);
 			expect(keybindingWrites).toHaveLength(0);
+		});
+
+		it("removes ctrl+u from existing deleteToLineStart bindings", () => {
+			(existsSync as ReturnType<typeof vi.fn>).mockReturnValue(true);
+			(readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(
+				'{"deleteToLineStart": ["ctrl+u", "ctrl+shift+u"], "cursorUp": ["up"]}',
+			);
+
+			usageTracker(pi as any);
+
+			const writeCalls = (writeFileSync as ReturnType<typeof vi.fn>).mock.calls.filter(
+				(c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("keybindings.json"),
+			);
+			expect(writeCalls).toHaveLength(1);
+			const written = JSON.parse(writeCalls[0][1] as string);
+			expect(written.deleteToLineStart).toEqual(["ctrl+shift+u"]);
+			expect(written.cursorUp).toEqual(["up"]);
 		});
 
 		it("preserves existing keybindings when adding deleteToLineStart", () => {
