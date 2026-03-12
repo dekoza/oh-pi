@@ -127,6 +127,9 @@ importers:
       '@ifi/oh-pi-themes':
         specifier: workspace:*
         version: link:../themes
+      croner:
+        specifier: ^10.0.1
+        version: 10.0.1
 
   packages/prompts: {}
 

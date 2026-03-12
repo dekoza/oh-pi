@@ -25,6 +25,10 @@
       "node_modules/@ifi/oh-pi-skills/skills"
     ]
   },
+  "scripts": {
+    "prepack": "node scripts/prepack.js",
+    "postpack": "node scripts/postpack.js"
+  },
   "files": [
     "README.md"
   ],
@@ -35,7 +39,8 @@
     "@ifi/oh-pi-themes": "workspace:*",
     "@ifi/oh-pi-prompts": "workspace:*",
     "@ifi/oh-pi-skills": "workspace:*",
-    "@ifi/oh-pi-agents": "workspace:*"
+    "@ifi/oh-pi-agents": "workspace:*",
+    "croner": "^10.0.1"
   },
   "bundledDependencies": [
     "@ifi/oh-pi-extensions",
@@ -43,6 +48,7 @@
     "@ifi/oh-pi-themes",
     "@ifi/oh-pi-prompts",
     "@ifi/oh-pi-skills",
-    "@ifi/oh-pi-agents"
+    "@ifi/oh-pi-agents",
+    "croner"
   ]
 }
