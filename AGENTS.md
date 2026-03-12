@@ -68,7 +68,7 @@ Releases are done locally in two steps:
 
 ```bash
 # Step 1: Release — bump versions, update CHANGELOG, tag, push
-./scripts/release.sh        # Full release (lint → typecheck → test → build → release)
+./scripts/release.sh        # Full release (lint → security → typecheck → test → build → release)
 ./scripts/release.sh --dry-run  # Preview what would happen
 
 # Step 2: Publish — build and push all packages to npm
@@ -111,6 +111,7 @@ packages/
 ```
 commit-lint ──┐
 changeset ────┤
+security ─────┤
 lint ─────────┼── build
 typecheck ────┤
 test (20+22) ─┘
@@ -126,6 +127,7 @@ pnpm build             # Build core + cli
 pnpm typecheck         # Type check with tsgo
 pnpm test              # Run all tests
 pnpm lint              # Biome check
+pnpm security:check    # Dependency allowlist + vulnerability audits
 pnpm lint:fix          # Auto-fix
 pnpm format            # Format all files
 knope document-change  # Create a changeset

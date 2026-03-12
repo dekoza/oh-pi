@@ -23,6 +23,10 @@ name = "release"
 help_text = "Bump versions, update CHANGELOG.md, create git tag, and push"
 
 [[workflows.steps]]
+type = "Command"
+command = "pnpm security:check"
+
+[[workflows.steps]]
 type = "PrepareRelease"
 
 [[workflows.steps]]

@@ -1,0 +1,19 @@
+{
+	"policyVersion": 1,
+	"description": "Approved external direct dependencies. Additions require manual review for maintenance quality, security posture, and project fit.",
+	"packages": [
+		"@biomejs/biome",
+		"@clack/prompts",
+		"@mariozechner/pi-agent-core",
+		"@mariozechner/pi-ai",
+		"@mariozechner/pi-coding-agent",
+		"@mariozechner/pi-tui",
+		"@sinclair/typebox",
+		"@types/node",
+		"@typescript/native-preview",
+		"chalk",
+		"croner",
+		"typescript",
+		"vitest"
+	]
+}

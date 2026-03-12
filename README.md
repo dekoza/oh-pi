@@ -365,8 +365,9 @@ pnpm install
 ```bash
 pnpm build          # Build core + cli (tsc)
 pnpm typecheck      # Type check with tsgo (fast)
-pnpm test           # Run all 254 tests
+pnpm test           # Run all tests
 pnpm lint           # Biome lint + format check
+pnpm security:check # Dependency allowlist + vulnerability audits
 pnpm lint:fix       # Auto-fix lint issues
 pnpm format         # Format all files
 ```
@@ -397,8 +398,8 @@ Releases are done locally in two steps:
 knope publish
 ```
 
-The release script runs all CI checks (lint, typecheck, test, build) before calling `knope release`.
-Use `--dry-run` to preview without making changes.
+The release script runs all CI/security checks (lint, security, typecheck, test, build) before
+calling `knope release`. Use `--dry-run` to preview without making changes.
 
 ### Project Structure
 

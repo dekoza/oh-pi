@@ -11,7 +11,7 @@ set -euo pipefail
 #
 # What it does:
 #   1. Verifies the working tree is clean
-#   2. Runs full CI checks (lint, typecheck, test, build)
+#   2. Runs full CI/security checks (lint, security, typecheck, test, build)
 #   3. Runs `knope release` to bump versions, update CHANGELOG.md, commit, tag, push
 #   4. Creates a GitHub release from the tag
 
@@ -43,6 +43,8 @@ echo ""
 echo "🔍 Running CI checks..."
 echo "  → lint"
 pnpm exec biome ci . || { echo "❌ Biome lint failed"; exit 1; }
+echo "  → security"
+pnpm security:check || { echo "❌ Security checks failed"; exit 1; }
 echo "  → typecheck"
 pnpm --filter @ifi/oh-pi-core build
 pnpm typecheck || { echo "❌ Type check failed"; exit 1; }
