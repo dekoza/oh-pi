@@ -345,10 +345,13 @@ describe("index-level telemetry propagation", () => {
 			modelRegistry: {},
 		};
 
-		await antColonyTool.execute("id", { goal: "test telemetry" }, undefined, undefined, ctx);
+		const executePromise = antColonyTool.execute("id", { goal: "test telemetry" }, undefined, undefined, ctx);
 
 		expect(runInvocations).toHaveLength(1);
 		expect(runInvocations[0].opts.eventBus).toBe(pi.events);
+
+		runInvocations[0].deferred.resolve(mkState("done", "test telemetry", runInvocations[0].stableId));
+		await executePromise;
 	});
 
 	it("wires event-bus handlers for runtime callback propagation on session_start", () => {
