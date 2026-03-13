@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.13 (2026-03-13)
+
+### Features
+
+- add pi-extension-subagents package (#6)
+
+### Fixes
+
+- harden JSON task plan parsing
+- keep safe-guard opt-in by default
+
 ## 0.2.12 (2026-03-12)
 
 ### Features
