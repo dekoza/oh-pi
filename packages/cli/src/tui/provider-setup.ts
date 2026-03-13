@@ -121,8 +121,8 @@ export function isOpenAICompatibleApi(api?: string): boolean {
  * Dynamically fetch model list, trying Anthropic, Google, and OpenAI-compatible API styles.
  * @param provider - Provider name
  * @param baseUrl - API base URL
- * @param apiKey - API 密钥或环境变量名
- * @returns 发现的模型列表及检测到的 API 类型
+ * @param apiKey - API key or environment variable name
+ * @returns discovered model list and detected API type
  */
 async function fetchModels(provider: string, baseUrl: string, apiKey: string): Promise<FetchResult> {
 	const base = normalizeDiscoveryBaseUrl(baseUrl);

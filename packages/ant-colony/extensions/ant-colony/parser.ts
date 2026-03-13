@@ -2,7 +2,7 @@ import { makePheromoneId } from "./spawner.js";
 import type { AntCaste, Pheromone, PheromoneType } from "./types.js";
 
 const VALID_CASTES = new Set(["scout", "worker", "soldier", "drone"]);
-const TASK_HEADER_RE = /^\s*#{2,6}\s*(?:task|任务)\s*[：:]\s*(.+?)\s*$/i;
+const TASK_HEADER_RE = /^\s*#{2,6}\s*task\s*:\s*(.+?)\s*$/i;
 
 export interface ParsedSubTask {
 	title: string;
@@ -25,13 +25,13 @@ function normalizeCaste(v: unknown): AntCaste {
 	if (VALID_CASTES.has(raw)) {
 		return raw as AntCaste;
 	}
-	if (raw.includes("侦察") || raw.includes("scout")) {
+	if (raw.includes("scout")) {
 		return "scout";
 	}
-	if (raw.includes("工") || raw.includes("worker")) {
+	if (raw.includes("worker")) {
 		return "worker";
 	}
-	if (raw.includes("兵") || raw.includes("review") || raw.includes("soldier")) {
+	if (raw.includes("review") || raw.includes("soldier")) {
 		return "soldier";
 	}
 	if (raw.includes("drone") || raw.includes("bash") || raw.includes("shell")) {
@@ -42,7 +42,7 @@ function normalizeCaste(v: unknown): AntCaste {
 
 function extractFileLike(value: string): string[] {
 	const normalized = value
-		.replace(/[，、；;]/g, ",")
+		.replace(/;/g, ",")
 		.replace(/["']/g, "")
 		.replace(/`/g, "");
 	const tokens = normalized
@@ -123,7 +123,7 @@ function parseTasksFromStructuredLines(output: string): ParsedSubTask[] {
 
 	const fieldMatch = (line: string) => {
 		return line.match(
-			/^\s*(?:[-*]|\d+\.)?\s*(?:\*\*|__)?\s*(description|desc|描述|说明|files?|文件|路径|caste|role|角色|priority|prio|优先级|context|上下文)\s*(?:\*\*|__)?\s*[：:]\s*(.*)$/i,
+			/^\s*(?:[-*]|\d+\.)?\s*(?:\*\*|__)?\s*(description|desc|files?|caste|role|priority|prio|context)\s*(?:\*\*|__)?\s*:\s*(.*)$/i,
 		);
 	};
 
@@ -155,27 +155,27 @@ function parseTasksFromStructuredLines(output: string): ParsedSubTask[] {
 		const key = m[1].toLowerCase();
 		const value = (m[2] || "").trim();
 
-		if (["description", "desc", "描述", "说明"].includes(key)) {
+		if (["description", "desc"].includes(key)) {
 			current.description = value;
 			continue;
 		}
 
-		if (["files", "file", "文件", "路径"].includes(key)) {
+		if (["files", "file"].includes(key)) {
 			current.files.push(...extractFileLike(value));
 			continue;
 		}
 
-		if (["caste", "role", "角色"].includes(key)) {
+		if (["caste", "role"].includes(key)) {
 			current.caste = normalizeCaste(value);
 			continue;
 		}
 
-		if (["priority", "prio", "优先级"].includes(key)) {
+		if (["priority", "prio"].includes(key)) {
 			current.priority = normalizePriority(value);
 			continue;
 		}
 
-		if (["context", "上下文"].includes(key)) {
+		if (key === "context") {
 			const contextLines = [value];
 			while (i + 1 < lines.length) {
 				const next = lines[i + 1];
@@ -210,7 +210,7 @@ export function parseSubTasks(output: string): ParsedSubTask[] {
 		}
 	}
 
-	// 2) Structured markdown task blocks (English/Chinese)
+	// 2) Structured markdown task blocks
 	return parseTasksFromStructuredLines(output);
 }
 

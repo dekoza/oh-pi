@@ -144,7 +144,6 @@ it, and npm hoists bundled deps away from `node_modules/` paths that the `pi` fi
 - **Core and CLI are compiled** — they produce `dist/` via tsc
 - **Imports**: CLI imports from `@ifi/oh-pi-core`, not relative paths. Extensions import from
   pi SDK packages.
-- **Chinese text in regex patterns and locales.ts is intentional** — bilingual parsing support
 - **`noDefaultExport: off`** — extensions use default exports as their API pattern
 - **Test files**: Relaxed lint rules (no explicit any, no unused vars, etc.)
 - **Ant colony workspace default**: ant-colony runs use isolated git worktrees by default, with

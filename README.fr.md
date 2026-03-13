@@ -12,10 +12,10 @@ Comme oh-my-zsh pour pi — mais avec une colonie de fourmis autonome.
 [![license](https://img.shields.io/npm/l/oh-pi)](./LICENSE)
 [![node](https://img.shields.io/node/v/oh-pi)](https://nodejs.org)
 
-[English](./README.md) | [中文](./README.zh.md) | [Français](./README.fr.md)
+[English](./README.md) | [Français](./README.fr.md)
 
 ```bash
-npx oh-pi
+npx @ifi/oh-pi
 ```
 
 </div>
@@ -25,8 +25,8 @@ npx oh-pi
 ## Démarrage en 30 secondes
 
 ```bash
-npx oh-pi    # tout configurer
-pi           # commencer à coder
+npx @ifi/oh-pi    # tout configurer
+pi                # commencer à coder
 ```
 
 oh-pi détecte automatiquement votre environnement, vous guide dans une TUI moderne, puis écrit

@@ -9,16 +9,16 @@ import { applyConfig, backupConfig, installPi } from "../utils/install.js";
  * Count the number of existing config files under a given directory prefix.
  * @param env - Environment info
  * @param dir - Directory name prefix
- * @returns 匹配的文件数
+ * @returns number of matching files
  */
 export function countExisting(env: EnvInfo, dir: string): number {
 	return env.existingFiles.filter((f) => f.startsWith(`${dir}/`)).length;
 }
 
 /**
- * 展示配置摘要，处理已有配置的备份/覆盖，安装 pi（如需），并应用最终配置。
- * @param config - 用户选择的配置对象
- * @param env - 当前环境信息
+ * Display the configuration summary, handle backup/overwrite of existing config, install pi if needed, and apply the final configuration.
+ * @param config - the user's selected configuration
+ * @param env - current environment info
  */
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Interactive wizard confirmation flow with many user branches.
 export async function confirmApply(config: OhPConfig, env: EnvInfo) {

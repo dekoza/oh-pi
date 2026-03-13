@@ -183,7 +183,7 @@ export default function antColonyExtension(pi: ExtensionAPI) {
 
 	const isExplicitStatusRequest = (ctx: unknown): boolean => {
 		const text = lastUserMessageText(ctx);
-		return /(?:\/colony-status|bg_colony_status)|(?:(?:蚁群|colony).{0,20}(?:状态|进度|进展|汇报|快照|status|progress|snapshot|update|check))|(?:(?:状态|进度|进展|汇报|快照|status|progress|snapshot|update|check).{0,20}(?:蚁群|colony))/i.test(
+		return /(?:\/colony-status|bg_colony_status)|(?:colony.{0,20}(?:status|progress|snapshot|update|check))|(?:(?:status|progress|snapshot|update|check).{0,20}colony)/i.test(
 			text,
 		);
 	};

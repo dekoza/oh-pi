@@ -1,5 +1,5 @@
 /** Supported UI locales for the oh-pi configurator. */
-export type Locale = "en" | "zh" | "fr";
+export type Locale = "en" | "fr";
 export type ProviderSetupStrategy = "keep" | "replace" | "add";
 
 /** Model info discovered at runtime from a provider's API. */

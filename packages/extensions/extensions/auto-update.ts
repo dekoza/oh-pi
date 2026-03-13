@@ -112,7 +112,7 @@ export default function (pi: ExtensionAPI) {
 					return;
 				}
 
-				const msg = `oh-pi ${latest} available (current: ${current}). Run: npx oh-pi@latest`;
+				const msg = `oh-pi ${latest} available (current: ${current}). Run: npx @ifi/oh-pi@latest`;
 				if (ctx.hasUI) {
 					ctx.ui.notify(msg, "info");
 				}

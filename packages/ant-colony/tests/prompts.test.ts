@@ -62,11 +62,6 @@ describe("buildPrompt", () => {
 		expect(r).toContain("code snippet");
 	});
 
-	it("adds Chinese hint for Chinese descriptions", () => {
-		const r = buildPrompt(mkTask({ description: "修复登录问题" }), "", "System");
-		expect(r).toContain("Chinese");
-	});
-
 	// Bio 3: Tandem foraging — tandem context
 	it("includes tandem parent result when provided", () => {
 		const r = buildPrompt(mkTask(), "", "System", 10, { parentResult: "Parent found auth module at src/auth.ts" });

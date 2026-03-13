@@ -4,7 +4,7 @@
 
 ## 1. Product Positioning
 
-**oh-pi** is the "out-of-the-box configurator" for pi-coding-agent. Users run `npx oh-pi` and
+**oh-pi** is the "out-of-the-box configurator" for pi-coding-agent. Users run `npx @ifi/oh-pi` and
 complete via interactive TUI:
 
 - API setup (multi-provider one-stop configuration)
@@ -17,7 +17,7 @@ Analogy: oh-my-zsh is to zsh as oh-pi is to pi.
 ## 2. Interaction Flow
 
 ```
-npx oh-pi
+npx @ifi/oh-pi
   │
   ├─ 1. Welcome & Environment Detection
   │     • Detect pi installation and version

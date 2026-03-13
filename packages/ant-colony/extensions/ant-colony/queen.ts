@@ -259,7 +259,7 @@ export interface PlanValidation {
 
 export function shouldUseScoutQuorum(goal: string): boolean {
 	// Multi-step/compound goals benefit from at least 2 scout votes
-	return /(\n\s*\d+[.)]|[;；]| and |以及|并且|同时|步骤|phase|then|之后)/i.test(goal);
+	return /(\n\s*\d+[.)]|;| and |phase|then)/i.test(goal);
 }
 
 export function decidePromoteOrFinalize(input: PromoteFinalizeGateInput): PromoteFinalizeGateDecision {

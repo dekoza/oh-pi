@@ -11,7 +11,7 @@ Use this checklist before publishing the 2-minute demo.
 ## 2) Script Alignment
 
 - [ ] Demo flow matches `docs/DEMO-SCRIPT.md`
-- [ ] Includes setup moment (`npx oh-pi` -> `pi`)
+- [ ] Includes setup moment (`npx @ifi/oh-pi` -> `pi`)
 - [ ] Includes colony signal progression (`SCOUTING` -> `COMPLETE`)
 - [ ] Explicitly states when **not** to use colony
 

@@ -10,12 +10,12 @@ Like oh-my-zsh for pi — but with an autonomous ant colony.
 
 [![CI](https://github.com/ifiokjr/oh-pi/actions/workflows/ci.yml/badge.svg)](https://github.com/ifiokjr/oh-pi/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/ifiokjr/oh-pi)](./LICENSE)
-[![node](https://img.shields.io/node/v/@ifi/oh-pi-cli)](https://nodejs.org)
+[![node](https://img.shields.io/node/v/@ifi/oh-pi)](https://nodejs.org)
 
-[English](./README.md) | [中文](./README.zh.md) | [Français](./README.fr.md)
+[English](./README.md) | [Français](./README.fr.md)
 
 ```bash
-npx @ifi/oh-pi-cli
+npx @ifi/oh-pi
 ```
 
 </div>
@@ -26,12 +26,11 @@ npx @ifi/oh-pi-cli
 
 ```bash
 npx @ifi/oh-pi       # install all extensions, themes, prompts, and skills
-npx @ifi/oh-pi-cli   # configure everything
 pi                    # start coding
 ```
 
-oh-pi auto-detects your environment, guides setup in a modern TUI, and writes `~/.pi/agent/` for
-you. Already configured? It detects existing files and offers **backup before overwriting**.
+oh-pi installs the full bundle into pi in one command. See [Installer Options](#installer-options)
+for project-scoped installs and version pinning.
 
 ## Packages
 
@@ -40,7 +39,6 @@ This is a monorepo. Install everything at once with `npx @ifi/oh-pi`, or pick in
 | Package                                          | Description                        | Install                                |
 | ------------------------------------------------ | ---------------------------------- | -------------------------------------- |
 | [`@ifi/oh-pi`](./packages/oh-pi)                 | One-command installer for all pkgs | `npx @ifi/oh-pi`                       |
-| [`@ifi/oh-pi-cli`](./packages/cli)               | Interactive TUI configurator       | `npx @ifi/oh-pi-cli`                   |
 | [`@ifi/oh-pi-core`](./packages/core)             | Shared types, registries, i18n     | (library, not installed directly)      |
 | [`@ifi/oh-pi-extensions`](./packages/extensions)          | 9 extensions (see below)                    | `pi install npm:@ifi/oh-pi-extensions`      |
 | [`@ifi/oh-pi-ant-colony`](./packages/ant-colony)          | Multi-agent swarm extension                 | `pi install npm:@ifi/oh-pi-ant-colony`      |

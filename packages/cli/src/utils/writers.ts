@@ -184,7 +184,7 @@ export function writeAgents(agentDir: string, config: OhPConfig) {
 	try {
 		let content = readFileSync(agentsSrc, "utf8");
 		if (config.locale && config.locale !== "en") {
-			const langNames: Record<string, string> = { zh: "Chinese (中文)", fr: "French (Français)" };
+			const langNames: Record<string, string> = { fr: "French (Français)" };
 			const lang = langNames[config.locale] ?? config.locale;
 			content = `## Language\nAlways respond in ${lang}. Use the user's language for all conversations and explanations. Code, commands, and technical terms can remain in English.\n\n${content}`;
 		}

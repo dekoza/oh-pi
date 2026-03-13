@@ -107,9 +107,5 @@ export function buildPrompt(
 	if (task.context) {
 		prompt += `\n## Pre-loaded Context (from scout)\n${task.context}\n`;
 	}
-	if (/[\u4e00-\u9fff]/.test(task.description)) {
-		prompt +=
-			"\nIMPORTANT: Follow the language requirements specified in the task description. If the task says to write in Chinese, write in Chinese.\n";
-	}
 	return prompt;
 }

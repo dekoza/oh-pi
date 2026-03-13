@@ -44,9 +44,6 @@ function detectLocale(): Locale | undefined {
 		}
 	}
 
-	if (lang.startsWith("zh")) {
-		return "zh";
-	}
 	if (lang.startsWith("fr")) {
 		return "fr";
 	}
@@ -65,10 +62,9 @@ export async function selectLanguage(): Promise<Locale> {
 	}
 
 	const locale = await p.select({
-		message: "Language / 语言 / Langue:",
+		message: "Language / Langue:",
 		options: [
 			{ value: "en" as Locale, label: "English" },
-			{ value: "zh" as Locale, label: "中文" },
 			{ value: "fr" as Locale, label: "Français" },
 		],
 	});

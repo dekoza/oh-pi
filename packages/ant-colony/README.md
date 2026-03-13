@@ -124,10 +124,10 @@ pi install npm:@ifi/oh-pi-ant-colony
 pi install npm:@ifi/oh-pi
 ```
 
-Then enable/configure extensions with:
+Then start pi:
 
 ```bash
-npx @ifi/oh-pi-cli
+pi
 ```
 
 ## Module Reference

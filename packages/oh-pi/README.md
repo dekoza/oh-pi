@@ -36,8 +36,9 @@ npx @ifi/oh-pi --remove             # uninstall all oh-pi packages from pi
 > **Note:** `safe-guard` is included in `@ifi/oh-pi-extensions` but disabled by default. Enable it
 > via `pi config` if you want command/path safety prompts.
 
-## TUI Configurator
+## Getting Started
 
 ```bash
-npx @ifi/oh-pi-cli
+npx @ifi/oh-pi
+pi
 ```

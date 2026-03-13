@@ -17,7 +17,7 @@
 ### 0:00 - 0:25 | One-command setup
 
 ```bash
-npx oh-pi
+npx @ifi/oh-pi
 ```
 
 Narration:
