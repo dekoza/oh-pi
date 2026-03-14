@@ -435,9 +435,33 @@ const PROVIDER_API_BASE: Record<ProviderKey, string> = {
 	google: "https://generativelanguage.googleapis.com",
 };
 
+/**
+ * Lazy-loaded reference to pi's OAuth refresh machinery.
+ * We import `@mariozechner/pi-ai/oauth` at runtime (the extension runs
+ * inside pi, so the module is always available). This avoids hardcoding
+ * OAuth client IDs/secrets and stays in sync with pi's auth system.
+ */
+let oauthModule: typeof import("@mariozechner/pi-ai/oauth") | null = null;
+async function getOAuthModule(): Promise<typeof import("@mariozechner/pi-ai/oauth") | null> {
+	if (oauthModule) {
+		return oauthModule;
+	}
+	try {
+		oauthModule = await import("@mariozechner/pi-ai/oauth");
+		return oauthModule;
+	} catch {
+		return null;
+	}
+}
+
+/** Path to pi's auth storage file. */
+function getAuthPath(): string {
+	return join(homedir(), ".pi", "agent", "auth.json");
+}
+
 /** Read pi's auth config from ~/.pi/agent/auth.json. */
 function readPiAuth(): Record<string, PiAuthEntry> {
-	const authPath = join(homedir(), ".pi", "agent", "auth.json");
+	const authPath = getAuthPath();
 	try {
 		if (!existsSync(authPath)) {
 			return {};
@@ -451,6 +475,90 @@ function readPiAuth(): Record<string, PiAuthEntry> {
 	} catch {
 		return {};
 	}
+}
+
+/**
+ * Refresh an expired OAuth token using pi's built-in OAuth module.
+ * Delegates to `getOAuthApiKey()` from `@mariozechner/pi-ai/oauth` which
+ * handles token refresh, client credentials, and endpoint selection for
+ * all supported providers.
+ *
+ * Updates auth.json on success. Returns the fresh entry or null on failure.
+ */
+async function refreshProviderToken(
+	authKey: string,
+	entry: PiAuthEntry,
+	allAuth: Record<string, PiAuthEntry>,
+): Promise<{ token: string; entry: PiAuthEntry } | null> {
+	const oauth = await getOAuthModule();
+	if (!oauth) {
+		return null;
+	}
+
+	try {
+		// Build the credentials map that pi's OAuth module expects
+		const credentials: Record<string, { type: string; [key: string]: unknown }> = {};
+		for (const [key, value] of Object.entries(allAuth)) {
+			if (value.type === "oauth") {
+				credentials[key] = { type: "oauth", ...value };
+			}
+		}
+
+		const result = await oauth.getOAuthApiKey(authKey, credentials);
+		if (!result) {
+			return null;
+		}
+
+		// Update the entry with refreshed credentials
+		const updated: PiAuthEntry = {
+			...entry,
+			...(result.newCredentials as Partial<PiAuthEntry>),
+		};
+
+		// Persist to auth.json
+		try {
+			const authPath = getAuthPath();
+			const current = existsSync(authPath) ? JSON.parse(readFileSync(authPath, "utf-8")) : {};
+			current[authKey] = { type: "oauth", ...updated };
+			writeFileSync(authPath, `${JSON.stringify(current, null, 2)}\n`, "utf-8");
+		} catch {
+			// Non-critical: token works in-memory even if persistence fails.
+		}
+
+		// For Google Antigravity, the API key is JSON-encoded with projectId.
+		// Extract the raw token for direct API calls.
+		let apiToken = result.apiKey;
+		try {
+			const parsed = JSON.parse(apiToken) as { token?: string };
+			if (parsed.token) {
+				apiToken = parsed.token;
+			}
+		} catch {
+			// Not JSON — use as-is (Anthropic and OpenAI return raw tokens).
+		}
+
+		return { token: apiToken, entry: updated };
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Ensure we have a fresh (non-expired) token for a provider.
+ * Checks the `expires` field; if expired, attempts OAuth token refresh.
+ * Returns the token string or null if refresh failed.
+ */
+async function ensureFreshToken(
+	authKey: string,
+	entry: PiAuthEntry,
+	allAuth: Record<string, PiAuthEntry>,
+): Promise<{ token: string; entry: PiAuthEntry } | null> {
+	if (Date.now() < entry.expires && entry.access) {
+		return { token: entry.access, entry };
+	}
+
+	// Token expired — try refreshing via pi's OAuth module
+	return refreshProviderToken(authKey, entry, allAuth);
 }
 
 /** Decode a JWT payload without verification. */
@@ -627,8 +735,14 @@ async function probeOpenAIDirect(token: string): Promise<ProviderRateLimits> {
 			result.error = "OpenAI auth token expired \u2014 re-authenticate in pi settings.";
 			return result;
 		}
+		if (response.status === 403) {
+			// ChatGPT/Codex subscription tokens can't access /v1/models but
+			// JWT info (plan, account) was already extracted above.
+			result.note = "Subscription auth \u2014 per-request rate limit windows unavailable.";
+			return result;
+		}
 		if (!response.ok) {
-			result.error = `OpenAI API returned ${response.status}`;
+			result.note = `OpenAI API returned ${response.status} \u2014 rate limit details unavailable.`;
 			return result;
 		}
 
@@ -1144,28 +1258,45 @@ export default function usageTracker(pi: ExtensionAPI) {
 		probeInFlight.add(provider);
 		try {
 			const auth = readPiAuth();
-			let token: string | null = null;
+			let authKey: string | null = null;
 			let authEntry: PiAuthEntry | undefined;
 
 			// Find the auth entry for this provider
 			for (const [key, entry] of Object.entries(auth)) {
 				if (AUTH_KEY_TO_PROVIDER[key] === provider && entry.access) {
-					token = entry.access;
+					authKey = key;
 					authEntry = entry;
 					break;
 				}
 			}
 
-			if (!token) {
+			if (!(authKey && authEntry)) {
 				rateLimits.set(provider, {
 					provider,
 					windows: [],
 					credits: null,
 					account: null,
 					plan: null,
-					note: `No pi auth configured for ${providerDisplayName(provider)} — run pi login.`,
+					note: `No pi auth configured for ${providerDisplayName(provider)} \u2014 run pi login.`,
 					probedAt: now,
 					error: null,
+				});
+				lastProbeTime.set(provider, now);
+				return;
+			}
+
+			// Ensure the token is fresh — auto-refresh expired OAuth tokens
+			const fresh = await ensureFreshToken(authKey, authEntry, auth);
+			if (!fresh) {
+				rateLimits.set(provider, {
+					provider,
+					windows: [],
+					credits: null,
+					account: null,
+					plan: null,
+					note: null,
+					probedAt: now,
+					error: `${providerDisplayName(provider)} token refresh failed \u2014 re-authenticate with pi login.`,
 				});
 				lastProbeTime.set(provider, now);
 				return;
@@ -1174,13 +1305,13 @@ export default function usageTracker(pi: ExtensionAPI) {
 			let limits: ProviderRateLimits;
 			switch (provider) {
 				case "anthropic":
-					limits = await probeAnthropicDirect(token);
+					limits = await probeAnthropicDirect(fresh.token);
 					break;
 				case "openai":
-					limits = await probeOpenAIDirect(token);
+					limits = await probeOpenAIDirect(fresh.token);
 					break;
 				case "google":
-					limits = await probeGoogleDirect(token, authEntry);
+					limits = await probeGoogleDirect(fresh.token, fresh.entry);
 					break;
 			}
 

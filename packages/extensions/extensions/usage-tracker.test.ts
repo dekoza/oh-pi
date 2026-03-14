@@ -492,20 +492,24 @@ describe("usage-tracker extension", () => {
 	});
 
 	describe("rate limit probing", () => {
-		it("triggers Anthropic API probe when using Claude model", () => {
+		it("triggers Anthropic API probe when using Claude model", async () => {
 			usageTracker(pi as any);
 			pi._emit("session_start", { type: "session_start" }, ctx);
 
-			// The probe calls fetch with the Anthropic API URL
+			// Allow async probe to complete (fire-and-forget with token refresh)
+			await vi.advanceTimersByTimeAsync(500);
+
 			const fetchCalls = mockFetch.mock.calls;
 			const anthropicCall = fetchCalls.find((c: any[]) => String(c[0]).includes("api.anthropic.com"));
 			expect(anthropicCall).toBeDefined();
 		});
 
-		it("triggers OpenAI API probe when using OpenAI model", () => {
+		it("triggers OpenAI API probe when using OpenAI model", async () => {
 			ctx.model = { id: "gpt-4o" } as any;
 			usageTracker(pi as any);
 			pi._emit("session_start", { type: "session_start" }, ctx);
+
+			await vi.advanceTimersByTimeAsync(500);
 
 			const fetchCalls = mockFetch.mock.calls;
 			const openaiCall = fetchCalls.find((c: any[]) => String(c[0]).includes("api.openai.com"));
