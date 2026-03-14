@@ -400,7 +400,7 @@ oh-pi/
 
 | Component          | Choice               | Rationale                                  |
 | ------------------ | -------------------- | ------------------------------------------ |
-| Execution          | `npx oh-pi`          | Zero-install, run-and-go                   |
+| Execution          | `npx @ifi/oh-pi`     | Zero-install, run-and-go                   |
 | TUI Framework      | `@inquirer/prompts`  | Mature, lightweight, rich interaction      |
 | Styling            | `chalk`              | Already a pi dependency, no extra overhead |
 | File I/O           | Node.js built-in     | No extra dependencies                      |
@@ -411,7 +411,7 @@ oh-pi/
 
 ### 6.1 Dual Distribution
 
-1. **npx oh-pi** — Configurator tool (interactive TUI)
+1. **npx @ifi/oh-pi** — Installer tool (installs all oh-pi packages)
 2. **pi install npm:oh-pi** — Pi Package (extensions/skills/themes/templates)
 
 Users can use just the configurator, just the Pi Package, or both.

@@ -1,10 +1,9 @@
 /**
- * Usage Tracker Extension — CodexBar-inspired Rate Limit & Cost Monitor for pi
+ * Usage Tracker Extension — Rate Limit & Cost Monitor for pi
  *
- * The **main feature** is showing **provider-level rate limits**: how much of
- * your weekly/session quota remains for Claude and Codex, with reset countdowns.
- * This is achieved by probing the `claude` and `codex` CLIs (the same approach
- * used by https://github.com/steipete/CodexBar).
+ * The **main feature** is showing **provider-level rate limits** by querying
+ * provider APIs directly using pi-managed auth tokens stored in
+ * `~/.pi/agent/auth.json`. Supports Anthropic, OpenAI, and Google providers.
  *
  * Also tracks per-model token usage and session costs locally.
  *
@@ -95,9 +94,12 @@ interface WindowPace {
 	willLastToReset: boolean;
 }
 
-/** Rate limit snapshot from a provider CLI probe. */
+/** Known provider keys — matches pi auth.json provider entries. */
+type ProviderKey = "anthropic" | "openai" | "google";
+
+/** Rate limit snapshot from a provider API probe. */
 interface ProviderRateLimits {
-	provider: "claude" | "codex";
+	provider: ProviderKey;
 	windows: RateWindow[];
 	credits: number | null;
 	account: string | null;
@@ -188,7 +190,7 @@ function clampPercent(value: number): number {
 	return Math.max(0, Math.min(100, value));
 }
 
-function inferWindowMinutes(provider: "claude" | "codex", label: string): number | null {
+function inferWindowMinutes(label: string): number | null {
 	const lower = label.toLowerCase();
 	if (lower.includes("5-hour") || lower.includes("5h")) {
 		return 300;
@@ -196,9 +198,11 @@ function inferWindowMinutes(provider: "claude" | "codex", label: string): number
 	if (lower.includes("weekly") || lower.includes("week")) {
 		return 10_080;
 	}
-	if (provider === "claude" && lower.includes("session")) {
-		// Claude session window is typically 5 hours.
-		return 300;
+	if (lower.includes("daily") || lower.includes("day")) {
+		return 1_440;
+	}
+	if (lower.includes("/min")) {
+		return 1;
 	}
 	return null;
 }
@@ -359,7 +363,7 @@ function upsertWindow(windows: RateWindow[], nextWindow: RateWindow): RateWindow
 	return nextWindow;
 }
 
-// ─── CLI probe — parse rate limits from `claude` and `codex` CLIs ────────
+// ─── ANSI helpers ────────────────────────────────────────────────────────────
 
 /** Strip ANSI escape codes from terminal output. */
 function stripAnsi(text: string): string {
@@ -403,441 +407,350 @@ function truncateAnsi(line: string, width: number): string {
 	return `${line.slice(0, i)}\x1b[0m`;
 }
 
-/**
- * Extract a percentage value from a line like "Current session  ███░░ 72% remaining"
- * or "5h limit  ▓▓▓░░ 45% left  resets in 2h 15m".
- * Looks for patterns: `N%`, `N% left`, `N% remaining`.
- */
-function extractPercentFromLine(line: string): number | null {
-	const match = line.match(/(\d{1,3})\s*%/);
-	if (!match) {
-		return null;
-	}
-	const value = Number.parseInt(match[1], 10);
-	// If the line says "used" this is usage%, we need to invert to get remaining%
-	if (/used/i.test(line)) {
-		return Math.max(0, 100 - value);
-	}
-	return value;
+// ─── pi-managed auth ─────────────────────────────────────────────────────────
+
+/** Structure of an entry in ~/.pi/agent/auth.json. */
+interface PiAuthEntry {
+	type: string;
+	access: string;
+	refresh: string;
+	expires: number;
+	accountId?: string;
+	projectId?: string;
+	email?: string;
 }
 
-/**
- * Extract reset description from a line, e.g. "resets in 3d 2h" → "in 3d 2h".
- */
-function extractResetFromLine(line: string): string | null {
-	const match = line.match(/resets?\s*(?:in|at|on)?\s*([^|·]+)/i);
-	if (match?.[1]?.trim()) {
-		return match[1].trim();
-	}
-	const fallback = line.match(/reset\s*[:-]\s*([^|·]+)/i);
-	return fallback?.[1]?.trim() || null;
-}
+/** Map from auth.json key to ProviderKey. */
+const AUTH_KEY_TO_PROVIDER: Record<string, ProviderKey> = {
+	anthropic: "anthropic",
+	"openai-codex": "openai",
+	"google-antigravity": "google",
+	"google-gemini-cli": "google",
+};
 
-function extractLineValue(text: string, pattern: RegExp): string | null {
-	const match = text.match(pattern);
-	const value = match?.[1]?.trim();
-	if (!value) {
-		return null;
-	}
-	return value;
-}
+/** Provider API base URLs. */
+const PROVIDER_API_BASE: Record<ProviderKey, string> = {
+	anthropic: "https://api.anthropic.com",
+	openai: "https://api.openai.com",
+	google: "https://generativelanguage.googleapis.com",
+};
 
-function detectClaudeWindowLabel(lowerLine: string): string | null {
-	if (
-		lowerLine.includes("current session") ||
-		(lowerLine.includes("session") && (lowerLine.includes("left") || lowerLine.includes("remaining")))
-	) {
-		return "Session";
-	}
-	if (
-		(lowerLine.includes("current week") || lowerLine.includes("weekly")) &&
-		(lowerLine.includes("all model") || lowerLine.includes("all models"))
-	) {
-		return "Weekly (all)";
-	}
-	if ((lowerLine.includes("current week") || lowerLine.includes("weekly")) && lowerLine.includes("opus")) {
-		return "Weekly (Opus)";
-	}
-	if ((lowerLine.includes("current week") || lowerLine.includes("weekly")) && lowerLine.includes("sonnet")) {
-		return "Weekly (Sonnet)";
-	}
-	if (lowerLine.includes("current week") || lowerLine.includes("weekly")) {
-		return "Weekly";
-	}
-	return null;
-}
-
-function detectCodexWindowLabel(lowerLine: string): string | null {
-	if (lowerLine.includes("5h limit") || lowerLine.includes("5-hour") || lowerLine.includes("five hour")) {
-		return "5-hour";
-	}
-	if (lowerLine.includes("weekly limit") || lowerLine.includes("weekly")) {
-		return "Weekly";
-	}
-	if (lowerLine.includes("session")) {
-		return "Session";
-	}
-	return null;
-}
-
-/**
- * Extract a number after "Credits:" e.g. "Credits: 142.50" → 142.5.
- */
-function extractCredits(text: string): number | null {
-	const match = text.match(/Credits:\s*([0-9][0-9.,]*)/i);
-	if (!match) {
-		return null;
-	}
-	return Number.parseFloat(match[1].replace(",", ""));
-}
-
-function parseJsonObjectFromText(text: string): Record<string, unknown> | null {
-	const clean = stripAnsi(text).trim();
-	if (!clean) {
-		return null;
-	}
-
+/** Read pi's auth config from ~/.pi/agent/auth.json. */
+function readPiAuth(): Record<string, PiAuthEntry> {
+	const authPath = join(homedir(), ".pi", "agent", "auth.json");
 	try {
-		const direct = JSON.parse(clean) as unknown;
-		if (direct && typeof direct === "object") {
-			return direct as Record<string, unknown>;
+		if (!existsSync(authPath)) {
+			return {};
 		}
+		const raw = readFileSync(authPath, "utf-8");
+		const parsed = JSON.parse(raw);
+		if (!parsed || typeof parsed !== "object") {
+			return {};
+		}
+		return parsed as Record<string, PiAuthEntry>;
 	} catch {
-		// Try extracting the first JSON object block below.
+		return {};
 	}
+}
 
-	const start = clean.indexOf("{");
-	const end = clean.lastIndexOf("}");
-	if (start < 0 || end <= start) {
-		return null;
-	}
+/** Decode a JWT payload without verification. */
+function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
 	try {
-		const sliced = JSON.parse(clean.slice(start, end + 1)) as unknown;
-		if (sliced && typeof sliced === "object") {
-			return sliced as Record<string, unknown>;
+		const parts = jwt.split(".");
+		if (parts.length < 2) {
+			return null;
 		}
+		const payload = Buffer.from(parts[1], "base64url").toString("utf-8");
+		return JSON.parse(payload) as Record<string, unknown>;
 	} catch {
 		return null;
 	}
-	return null;
 }
 
-function hydrateClaudeAuthStatus(result: ProviderRateLimits, text: string): void {
-	const parsed = parseJsonObjectFromText(text);
-	if (!parsed) {
+/** Convert an ISO 8601 timestamp or OpenAI-style duration string to a countdown. */
+function resetCountdown(isoOrDuration: string): string | null {
+	// Try ISO timestamp first (e.g. "2025-03-13T11:00:30Z")
+	const resetTime = new Date(isoOrDuration).getTime();
+	if (Number.isFinite(resetTime) && resetTime > 0) {
+		const diffMs = resetTime - Date.now();
+		if (diffMs <= 0) {
+			return "now";
+		}
+		return `in ${fmtDuration(diffMs)}`;
+	}
+	// OpenAI uses compact durations like "6ms", "2s", "1m3s"
+	const matches = [...isoOrDuration.matchAll(/(\d+(?:\.\d+)?)(ms|s|m|h)/g)];
+	if (matches.length > 0) {
+		const multipliers: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 };
+		let totalMs = 0;
+		for (const match of matches) {
+			totalMs += Number.parseFloat(match[1]) * (multipliers[match[2]] ?? 1);
+		}
+		if (totalMs <= 0) {
+			return "now";
+		}
+		return `in ${fmtDuration(totalMs)}`;
+	}
+	return isoOrDuration;
+}
+
+// ─── Direct API probes ──────────────────────────────────────────────────────
+
+/**
+ * Probe Anthropic API for rate limits using pi-managed OAuth token.
+ *
+ * Calls `POST /v1/messages/count_tokens` (free, no generation cost) and reads
+ * rate limit info from the response headers.
+ */
+async function probeAnthropicDirect(token: string): Promise<ProviderRateLimits> {
+	const result: ProviderRateLimits = {
+		provider: "anthropic",
+		windows: [],
+		credits: null,
+		account: null,
+		plan: null,
+		note: null,
+		probedAt: Date.now(),
+		error: null,
+	};
+
+	try {
+		const response = await fetch(`${PROVIDER_API_BASE.anthropic}/v1/messages/count_tokens`, {
+			method: "POST",
+			headers: {
+				authorization: `Bearer ${token}`,
+				"anthropic-version": "2023-06-01",
+				"anthropic-beta": "token-counting-2024-11-01",
+				"content-type": "application/json",
+			},
+			body: JSON.stringify({
+				model: "claude-sonnet-4-20250514",
+				messages: [{ role: "user", content: "hi" }],
+			}),
+			signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+		});
+
+		if (response.status === 401) {
+			result.error = "Anthropic auth token expired \u2014 re-authenticate in pi settings.";
+			return result;
+		}
+		if (!response.ok) {
+			result.error = `Anthropic API returned ${response.status}`;
+			return result;
+		}
+
+		// Extract rate limit info from response headers
+		const reqLimit = Number.parseInt(response.headers.get("anthropic-ratelimit-requests-limit") ?? "", 10);
+		const reqRemaining = Number.parseInt(response.headers.get("anthropic-ratelimit-requests-remaining") ?? "", 10);
+		const reqReset = response.headers.get("anthropic-ratelimit-requests-reset");
+		const tokLimit = Number.parseInt(response.headers.get("anthropic-ratelimit-tokens-limit") ?? "", 10);
+		const tokRemaining = Number.parseInt(response.headers.get("anthropic-ratelimit-tokens-remaining") ?? "", 10);
+		const tokReset = response.headers.get("anthropic-ratelimit-tokens-reset");
+
+		if (Number.isFinite(reqLimit) && Number.isFinite(reqRemaining) && reqLimit > 0) {
+			const percentLeft = clampPercent((reqRemaining / reqLimit) * 100);
+			upsertWindow(result.windows, {
+				label: `Requests (${fmtTokens(reqLimit)}/min)`,
+				percentLeft,
+				resetDescription: reqReset ? resetCountdown(reqReset) : null,
+				windowMinutes: 1,
+			});
+		}
+
+		if (Number.isFinite(tokLimit) && Number.isFinite(tokRemaining) && tokLimit > 0) {
+			const percentLeft = clampPercent((tokRemaining / tokLimit) * 100);
+			upsertWindow(result.windows, {
+				label: `Tokens (${fmtTokens(tokLimit)}/min)`,
+				percentLeft,
+				resetDescription: tokReset ? resetCountdown(tokReset) : null,
+				windowMinutes: 1,
+			});
+		}
+
+		result.plan = "OAuth";
+	} catch (e) {
+		if (e instanceof Error && e.name === "TimeoutError") {
+			result.error = "Anthropic API probe timed out";
+		} else {
+			result.error = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	return result;
+}
+
+/** Extract OpenAI account info from a JWT access token. */
+function hydrateOpenAIFromJwt(result: ProviderRateLimits, token: string): void {
+	const jwt = decodeJwtPayload(token);
+	if (!jwt) {
 		return;
 	}
+	const profile = jwt["https://api.openai.com/profile"] as { email?: string } | undefined;
+	if (profile?.email) {
+		result.account = profile.email;
+	}
+	// biome-ignore lint/style/useNamingConvention: OpenAI JWT claim uses snake_case
+	const auth = jwt["https://api.openai.com/auth"] as { chatgpt_plan_type?: string } | undefined;
+	if (auth?.chatgpt_plan_type) {
+		result.plan = auth.chatgpt_plan_type;
+	}
+}
 
-	const email = parsed.email;
-	if (typeof email === "string" && email.trim()) {
-		result.account ??= email.trim();
+/**
+ * Probe OpenAI API for rate limits using pi-managed OAuth token.
+ *
+ * Calls `GET /v1/models` (free) and reads rate limit headers. Also decodes the
+ * JWT to extract plan type and account email.
+ */
+async function probeOpenAIDirect(token: string): Promise<ProviderRateLimits> {
+	const result: ProviderRateLimits = {
+		provider: "openai",
+		windows: [],
+		credits: null,
+		account: null,
+		plan: null,
+		note: null,
+		probedAt: Date.now(),
+		error: null,
+	};
+
+	hydrateOpenAIFromJwt(result, token);
+
+	try {
+		const response = await fetch(`${PROVIDER_API_BASE.openai}/v1/models`, {
+			method: "GET",
+			headers: { authorization: `Bearer ${token}` },
+			signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+		});
+
+		if (response.status === 401) {
+			result.error = "OpenAI auth token expired \u2014 re-authenticate in pi settings.";
+			return result;
+		}
+		if (!response.ok) {
+			result.error = `OpenAI API returned ${response.status}`;
+			return result;
+		}
+
+		// Extract rate limit info from response headers
+		const reqLimit = Number.parseInt(response.headers.get("x-ratelimit-limit-requests") ?? "", 10);
+		const reqRemaining = Number.parseInt(response.headers.get("x-ratelimit-remaining-requests") ?? "", 10);
+		const reqReset = response.headers.get("x-ratelimit-reset-requests");
+		const tokLimit = Number.parseInt(response.headers.get("x-ratelimit-limit-tokens") ?? "", 10);
+		const tokRemaining = Number.parseInt(response.headers.get("x-ratelimit-remaining-tokens") ?? "", 10);
+		const tokReset = response.headers.get("x-ratelimit-reset-tokens");
+
+		if (Number.isFinite(reqLimit) && Number.isFinite(reqRemaining) && reqLimit > 0) {
+			const percentLeft = clampPercent((reqRemaining / reqLimit) * 100);
+			upsertWindow(result.windows, {
+				label: `Requests (${fmtTokens(reqLimit)}/win)`,
+				percentLeft,
+				resetDescription: reqReset ? resetCountdown(reqReset) : null,
+				windowMinutes: inferWindowMinutes(`Requests (${fmtTokens(reqLimit)}/win)`),
+			});
+		}
+
+		if (Number.isFinite(tokLimit) && Number.isFinite(tokRemaining) && tokLimit > 0) {
+			const percentLeft = clampPercent((tokRemaining / tokLimit) * 100);
+			upsertWindow(result.windows, {
+				label: `Tokens (${fmtTokens(tokLimit)}/win)`,
+				percentLeft,
+				resetDescription: tokReset ? resetCountdown(tokReset) : null,
+				windowMinutes: inferWindowMinutes(`Tokens (${fmtTokens(tokLimit)}/win)`),
+			});
+		}
+	} catch (e) {
+		if (e instanceof Error && e.name === "TimeoutError") {
+			result.error = "OpenAI API probe timed out";
+		} else {
+			result.error = e instanceof Error ? e.message : String(e);
+		}
 	}
 
-	const subscriptionType = parsed.subscriptionType;
-	if (typeof subscriptionType === "string" && subscriptionType.trim()) {
-		result.plan ??= subscriptionType.trim();
+	return result;
+}
+
+/**
+ * Probe Google AI API for rate limits using pi-managed OAuth token.
+ *
+ * Calls `GET /v1beta/models` (free) and reads any rate limit headers.
+ */
+async function probeGoogleDirect(token: string, authEntry?: PiAuthEntry): Promise<ProviderRateLimits> {
+	const result: ProviderRateLimits = {
+		provider: "google",
+		windows: [],
+		credits: null,
+		account: authEntry?.email ?? null,
+		plan: "OAuth",
+		note: null,
+		probedAt: Date.now(),
+		error: null,
+	};
+
+	try {
+		const response = await fetch(`${PROVIDER_API_BASE.google}/v1beta/models`, {
+			method: "GET",
+			headers: { authorization: `Bearer ${token}` },
+			signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+		});
+
+		if (response.status === 401) {
+			result.error = "Google auth token expired \u2014 re-authenticate in pi settings.";
+			return result;
+		}
+		if (!response.ok) {
+			result.error = `Google API returned ${response.status}`;
+			return result;
+		}
+
+		// Google's model listing typically doesn't include per-request rate limit
+		// headers, but check for them anyway.
+		const rateLimit = response.headers.get("x-ratelimit-limit");
+		const rateRemaining = response.headers.get("x-ratelimit-remaining");
+		const rateReset = response.headers.get("x-ratelimit-reset");
+
+		if (rateLimit && rateRemaining) {
+			const limit = Number.parseInt(rateLimit, 10);
+			const remaining = Number.parseInt(rateRemaining, 10);
+			if (Number.isFinite(limit) && Number.isFinite(remaining) && limit > 0) {
+				const percentLeft = clampPercent((remaining / limit) * 100);
+				upsertWindow(result.windows, {
+					label: `Requests (${fmtTokens(limit)}/win)`,
+					percentLeft,
+					resetDescription: rateReset ? resetCountdown(rateReset) : null,
+					windowMinutes: null,
+				});
+			}
+		}
+
+		if (result.windows.length === 0) {
+			result.note = "Google API authenticated successfully; rate limit details are project-scoped.";
+		}
+	} catch (e) {
+		if (e instanceof Error && e.name === "TimeoutError") {
+			result.error = "Google API probe timed out";
+		} else {
+			result.error = e instanceof Error ? e.message : String(e);
+		}
 	}
 
-	const authMethod = parsed.authMethod;
-	if (!result.plan && typeof authMethod === "string" && authMethod.trim()) {
-		result.plan = authMethod.trim();
-	}
+	return result;
 }
 
 function hasProviderDisplayData(rl: ProviderRateLimits): boolean {
 	return rl.windows.length > 0 || rl.credits !== null || Boolean(rl.account || rl.plan || rl.note || rl.error);
 }
 
-function includesAny(haystack: string, needles: string[]): boolean {
-	for (const needle of needles) {
-		if (haystack.includes(needle)) {
-			return true;
-		}
+/** Map from ProviderKey to human-readable display name. */
+function providerDisplayName(provider: ProviderKey): string {
+	switch (provider) {
+		case "anthropic":
+			return "Anthropic";
+		case "openai":
+			return "OpenAI";
+		case "google":
+			return "Google";
 	}
-	return false;
-}
-
-function classifyClaudeUsageOutput(text: string): { error?: string; note?: string } {
-	const lower = text.toLowerCase();
-	if (
-		includesAny(lower, [
-			"not logged in",
-			"authentication_error",
-			"token has expired",
-			"oauth token has expired",
-			"api error: 401",
-			"invalid authentication credentials",
-			"please run /login",
-			"failed to authenticate",
-		])
-	) {
-		return { error: "Claude CLI authentication required or expired; run claude auth login." };
-	}
-	if (lower.includes("stdin is not a terminal")) {
-		return { note: "Claude usage windows require an interactive TTY in this environment." };
-	}
-	if (lower.includes('could you clarify what you mean by "usage"?') || lower.includes("unknown skill: usage")) {
-		return { note: "Claude CLI no longer exposes /usage rate-limit windows in this build." };
-	}
-	return {};
-}
-
-function classifyCodexUsageOutput(text: string): { error?: string; note?: string } {
-	const lower = text.toLowerCase();
-	if (
-		includesAny(lower, [
-			"not logged in",
-			"login required",
-			"api error: 401",
-			"invalid authentication credentials",
-			"please run /login",
-			"failed to authenticate",
-			"oauth token has expired",
-		])
-	) {
-		return { error: "Codex CLI authentication required; run codex login." };
-	}
-	if (lower.includes("stdin is not a terminal")) {
-		return { note: "Codex rate-limit windows require an interactive TTY in this environment." };
-	}
-	if (lower.includes("operation not permitted")) {
-		return { note: "Codex CLI usage probing is blocked by local OS permissions in this environment." };
-	}
-	return {};
-}
-
-/**
- * Probe the Claude CLI for rate limit info.
- *
- * Runs `claude /usage` and parses the TUI output for:
- * - Current session % remaining
- * - Weekly (all models) % remaining
- * - Weekly (Opus/Sonnet) % remaining
- *
- * This is the same approach CodexBar uses.
- */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: multi-source Claude probing (auth metadata + legacy usage windows) requires layered fallbacks.
-async function probeClaude(
-	exec: (cmd: string, args: string[], opts?: { timeout?: number }) => Promise<{ stdout: string; exitCode: number }>,
-): Promise<ProviderRateLimits> {
-	const result: ProviderRateLimits = {
-		provider: "claude",
-		windows: [],
-		credits: null,
-		account: null,
-		plan: null,
-		note: null,
-		probedAt: Date.now(),
-		error: null,
-	};
-
-	try {
-		const authStatus = await exec("claude", ["auth", "status"], { timeout: PROBE_TIMEOUT_MS });
-		hydrateClaudeAuthStatus(result, authStatus.stdout);
-	} catch {
-		// Best-effort metadata probe only.
-	}
-
-	let clean = "";
-	try {
-		// Legacy window probe (some Claude CLI builds still expose this shape).
-		const usage = await exec("claude", ["usage"], { timeout: PROBE_TIMEOUT_MS });
-		clean = stripAnsi(usage.stdout);
-	} catch (e) {
-		const reason = e instanceof Error ? e.message : String(e);
-		if (result.account || result.plan) {
-			result.note = "Claude CLI usage windows are unavailable in this version.";
-		} else {
-			result.error = reason;
-		}
-		return result;
-	}
-
-	if (!clean || clean.length < 10) {
-		if (result.account || result.plan) {
-			result.note = "Claude CLI did not return rate-limit windows.";
-		} else {
-			result.error = "Empty output from claude CLI";
-		}
-		return result;
-	}
-
-	const classification = classifyClaudeUsageOutput(clean);
-	if (classification.error) {
-		result.error = classification.error;
-		return result;
-	}
-	if (classification.note) {
-		result.note = classification.note;
-		return result;
-	}
-
-	const lines = clean.split("\n");
-	let lastWindow: RateWindow | null = null;
-
-	for (const line of lines) {
-		const trimmed = line.trim();
-		if (!trimmed) {
-			continue;
-		}
-
-		result.account ??= extractLineValue(trimmed, /account\s*[:-]\s*(.+)$/i);
-		result.plan ??= extractLineValue(trimmed, /plan\s*[:-]\s*(.+)$/i);
-
-		const lower = trimmed.toLowerCase();
-		const pct = extractPercentFromLine(trimmed);
-		const label = detectClaudeWindowLabel(lower);
-		const resetDescription = extractResetFromLine(trimmed);
-
-		if (label && pct !== null) {
-			lastWindow = upsertWindow(result.windows, {
-				label,
-				percentLeft: clampPercent(pct),
-				resetDescription,
-				windowMinutes: inferWindowMinutes("claude", label),
-			});
-			continue;
-		}
-
-		if (resetDescription && lastWindow && !lastWindow.resetDescription) {
-			lastWindow.resetDescription = resetDescription;
-		}
-	}
-
-	// If line-by-line didn't work, try ordered percentage extraction (fallback)
-	if (result.windows.length === 0) {
-		const allPcts = [...clean.matchAll(/(\d{1,3})\s*%/g)].map((m) => Number.parseInt(m[1], 10));
-		if (allPcts.length >= 1) {
-			upsertWindow(result.windows, {
-				label: "Session",
-				percentLeft: clampPercent(allPcts[0]),
-				resetDescription: null,
-				windowMinutes: inferWindowMinutes("claude", "Session"),
-			});
-		}
-		if (allPcts.length >= 2) {
-			upsertWindow(result.windows, {
-				label: "Weekly (all)",
-				percentLeft: clampPercent(allPcts[1]),
-				resetDescription: null,
-				windowMinutes: inferWindowMinutes("claude", "Weekly (all)"),
-			});
-		}
-		if (allPcts.length >= 3) {
-			upsertWindow(result.windows, {
-				label: "Weekly (model)",
-				percentLeft: clampPercent(allPcts[2]),
-				resetDescription: null,
-				windowMinutes: inferWindowMinutes("claude", "Weekly (model)"),
-			});
-		}
-	}
-
-	if (result.windows.length === 0 && !result.note && !result.error) {
-		result.note = "No Claude rate-limit windows found in CLI output.";
-	}
-
-	return result;
-}
-
-/**
- * Probe the Codex CLI for rate limit info.
- *
- * Parses for:
- * - 5-hour limit % remaining
- * - Weekly limit % remaining
- * - Credits remaining
- * - account/plan hints when available
- */
-async function probeCodex(
-	exec: (cmd: string, args: string[], opts?: { timeout?: number }) => Promise<{ stdout: string; exitCode: number }>,
-): Promise<ProviderRateLimits> {
-	const result: ProviderRateLimits = {
-		provider: "codex",
-		windows: [],
-		credits: null,
-		account: null,
-		plan: null,
-		note: null,
-		probedAt: Date.now(),
-		error: null,
-	};
-
-	try {
-		const loginStatus = await exec("codex", ["login", "status"], { timeout: PROBE_TIMEOUT_MS });
-		const loginClean = stripAnsi(loginStatus.stdout);
-		result.plan ??= extractLineValue(loginClean, /logged in using\s+(.+)$/im);
-		result.account ??= extractLineValue(loginClean, /account\s*[:-]\s*(.+)$/im);
-	} catch {
-		// Best-effort metadata probe only.
-	}
-
-	try {
-		const proc = await exec("codex", ["-s", "read-only", "-a", "untrusted"], { timeout: PROBE_TIMEOUT_MS });
-		const clean = stripAnsi(proc.stdout);
-
-		if (!clean || clean.length < 10) {
-			if (result.plan || result.account) {
-				result.note = "Codex CLI did not return rate-limit windows.";
-			} else {
-				result.error = "Empty output from codex CLI";
-			}
-			return result;
-		}
-
-		const classification = classifyCodexUsageOutput(clean);
-		if (classification.error) {
-			result.error = classification.error;
-			return result;
-		}
-		if (classification.note) {
-			result.note = classification.note;
-			return result;
-		}
-
-		result.credits = extractCredits(clean);
-
-		const lines = clean.split("\n");
-		let lastWindow: RateWindow | null = null;
-		for (const line of lines) {
-			const trimmed = line.trim();
-			if (!trimmed) {
-				continue;
-			}
-
-			result.account ??= extractLineValue(trimmed, /account\s*[:-]\s*(.+)$/i);
-			result.plan ??= extractLineValue(trimmed, /logged in using\s+(.+)$/i);
-			result.plan ??= extractLineValue(trimmed, /plan\s*[:-]\s*(.+)$/i);
-
-			const lower = trimmed.toLowerCase();
-			const pct = extractPercentFromLine(trimmed);
-			const label = detectCodexWindowLabel(lower);
-			const resetDescription = extractResetFromLine(trimmed);
-
-			if (label && pct !== null) {
-				lastWindow = upsertWindow(result.windows, {
-					label,
-					percentLeft: clampPercent(pct),
-					resetDescription,
-					windowMinutes: inferWindowMinutes("codex", label),
-				});
-				continue;
-			}
-
-			if (resetDescription && lastWindow && !lastWindow.resetDescription) {
-				lastWindow.resetDescription = resetDescription;
-			}
-		}
-	} catch (e) {
-		result.error = e instanceof Error ? e.message : String(e);
-		return result;
-	}
-
-	if (result.windows.length === 0 && !result.error) {
-		result.note = result.note ?? "No Codex rate-limit windows found in CLI output.";
-	}
-
-	return result;
 }
 
 // ─── Extension entry point ──────────────────────────────────────────────────
@@ -1218,10 +1131,11 @@ export default function usageTracker(pi: ExtensionAPI) {
 	// ─── Rate limit probing ───────────────────────────────────────────────
 
 	/**
-	 * Probe a provider for rate limit data (with cooldown).
-	 * Uses `pi.exec()` to run CLI commands.
+	 * Probe a provider for rate limit data using pi-managed auth tokens.
+	 * Reads credentials from `~/.pi/agent/auth.json` and calls the provider
+	 * API directly — no external CLI tools required.
 	 */
-	async function probeProvider(provider: "claude" | "codex", force = false): Promise<void> {
+	async function probeProvider(provider: ProviderKey, force = false): Promise<void> {
 		const now = Date.now();
 		const last = lastProbeTime.get(provider) ?? 0;
 		if ((!force && now - last < PROBE_COOLDOWN_MS) || probeInFlight.has(provider)) {
@@ -1229,11 +1143,47 @@ export default function usageTracker(pi: ExtensionAPI) {
 		}
 		probeInFlight.add(provider);
 		try {
-			const execFn = async (cmd: string, args: string[], opts?: { timeout?: number }) => {
-				const result = await pi.exec(cmd, args, { timeout: opts?.timeout });
-				return { stdout: result.stdout, exitCode: result.exitCode };
-			};
-			const limits = provider === "claude" ? await probeClaude(execFn) : await probeCodex(execFn);
+			const auth = readPiAuth();
+			let token: string | null = null;
+			let authEntry: PiAuthEntry | undefined;
+
+			// Find the auth entry for this provider
+			for (const [key, entry] of Object.entries(auth)) {
+				if (AUTH_KEY_TO_PROVIDER[key] === provider && entry.access) {
+					token = entry.access;
+					authEntry = entry;
+					break;
+				}
+			}
+
+			if (!token) {
+				rateLimits.set(provider, {
+					provider,
+					windows: [],
+					credits: null,
+					account: null,
+					plan: null,
+					note: `No pi auth configured for ${providerDisplayName(provider)} — run pi login.`,
+					probedAt: now,
+					error: null,
+				});
+				lastProbeTime.set(provider, now);
+				return;
+			}
+
+			let limits: ProviderRateLimits;
+			switch (provider) {
+				case "anthropic":
+					limits = await probeAnthropicDirect(token);
+					break;
+				case "openai":
+					limits = await probeOpenAIDirect(token);
+					break;
+				case "google":
+					limits = await probeGoogleDirect(token, authEntry);
+					break;
+			}
+
 			rateLimits.set(provider, limits);
 			lastProbeTime.set(provider, Date.now());
 		} catch {
@@ -1255,10 +1205,29 @@ export default function usageTracker(pi: ExtensionAPI) {
 		const id = model.id.toLowerCase();
 		// Detect provider from model ID
 		if (id.includes("claude") || id.includes("sonnet") || id.includes("opus") || id.includes("haiku")) {
-			probeProvider("claude", force);
+			probeProvider("anthropic", force);
 		}
 		if (id.includes("gpt") || id.includes("o1") || id.includes("o3") || id.includes("o4") || id.includes("codex")) {
-			probeProvider("codex", force);
+			probeProvider("openai", force);
+		}
+		if (id.includes("gemini") || id.includes("flash") || id.includes("pro-exp") || id.includes("antigravity")) {
+			probeProvider("google", force);
+		}
+	}
+
+	/**
+	 * Probe all providers that have auth configured in pi.
+	 * Used when opening the dashboard overlay to show complete status.
+	 */
+	function triggerProbeAll(force = false): void {
+		const auth = readPiAuth();
+		const seen = new Set<ProviderKey>();
+		for (const key of Object.keys(auth)) {
+			const provider = AUTH_KEY_TO_PROVIDER[key];
+			if (provider && !seen.has(provider)) {
+				seen.add(provider);
+				probeProvider(provider, force);
+			}
 		}
 	}
 
@@ -1268,7 +1237,7 @@ export default function usageTracker(pi: ExtensionAPI) {
 	 * Broadcast current usage/rate-limit data to other extensions via `pi.events`.
 	 *
 	 * The ant-colony budget-planner listens on `"usage:limits"` to receive:
-	 * - Provider rate limit windows (Claude session/weekly %, Codex 5h/weekly %)
+	 * - Provider rate limit windows (Anthropic, OpenAI, Google rate limits)
 	 * - Aggregate session cost
 	 * - Per-model usage snapshots
 	 *
@@ -1328,7 +1297,7 @@ export default function usageTracker(pi: ExtensionAPI) {
 			if (!hasProviderDisplayData(rl)) {
 				continue;
 			}
-			const name = rl.provider.charAt(0).toUpperCase() + rl.provider.slice(1);
+			const name = providerDisplayName(rl.provider);
 			const windows = [...rl.windows].sort((a, b) => a.percentLeft - b.percentLeft);
 			lines.push(`${name} Rate Limits:`);
 			if (rl.error) {
@@ -1385,7 +1354,7 @@ export default function usageTracker(pi: ExtensionAPI) {
 				continue;
 			}
 
-			const name = rl.provider.charAt(0).toUpperCase() + rl.provider.slice(1);
+			const name = providerDisplayName(rl.provider);
 			const windows = [...rl.windows].sort((a, b) => a.percentLeft - b.percentLeft);
 			lines.push(`  ${theme.fg("accent", `▸ ${name} Rate Limits`)}`);
 			if (rl.error) {
@@ -1448,7 +1417,7 @@ export default function usageTracker(pi: ExtensionAPI) {
 			if (rl.error || rl.windows.length === 0) {
 				continue;
 			}
-			const name = rl.provider === "claude" ? "Claude" : "Codex";
+			const name = providerDisplayName(rl.provider);
 			// Show the most constrained window (lowest %)
 			const most = rl.windows.reduce((a, b) => (a.percentLeft < b.percentLeft ? a : b));
 			const color = pctColor(most.percentLeft);
@@ -1747,8 +1716,8 @@ export default function usageTracker(pi: ExtensionAPI) {
 	pi.registerCommand("usage", {
 		description: "Show rate limits, token usage, and cost breakdown",
 		async handler(_args, ctx) {
-			// Force a fresh probe before showing
-			triggerProbe(ctx, true);
+			// Force a fresh probe of all configured providers before showing
+			triggerProbeAll(true);
 			// Small delay to let probe complete
 			await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -1804,11 +1773,11 @@ export default function usageTracker(pi: ExtensionAPI) {
 	// ─── /usage-refresh command ──────────────────────────────────────────
 
 	pi.registerCommand("usage-refresh", {
-		description: "Force refresh rate limit data from provider CLIs",
+		description: "Force refresh rate limit data from provider APIs",
 		async handler(_args, ctx) {
 			// Clear cooldowns to force fresh probes
 			lastProbeTime.clear();
-			triggerProbe(ctx, true);
+			triggerProbeAll(true);
 			ctx.ui.notify("Refreshing rate limits...", "info");
 		},
 	});
@@ -1819,7 +1788,7 @@ export default function usageTracker(pi: ExtensionAPI) {
 		name: "usage_report",
 		label: "Usage Report",
 		description:
-			"Generate a rate limit status and token usage report. Shows remaining weekly/session quotas for Claude and Codex, plus per-model costs. Use when the user asks about spending, rate limits, quotas, or remaining usage.",
+			"Generate a rate limit status and token usage report. Shows provider rate limits (Anthropic, OpenAI, Google) using pi-managed auth, plus per-model costs. Use when the user asks about spending, rate limits, quotas, or remaining usage.",
 		promptSnippet: "Show provider rate limits (% remaining, reset time) and session usage/cost report.",
 		parameters: Type.Object({
 			format: Type.Optional(
@@ -1829,8 +1798,8 @@ export default function usageTracker(pi: ExtensionAPI) {
 			),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			// Force a probe before reporting
-			triggerProbe(ctx, true);
+			// Force a probe of all configured providers before reporting
+			triggerProbeAll(true);
 			await new Promise((resolve) => setTimeout(resolve, 1000));
 
 			const format = params.format ?? "detailed";
@@ -1857,7 +1826,7 @@ export default function usageTracker(pi: ExtensionAPI) {
 	pi.registerShortcut("ctrl+u", {
 		description: "Show usage dashboard (rate limits + costs)",
 		async handler(ctx) {
-			triggerProbe(ctx, true);
+			triggerProbeAll(true);
 			await new Promise((resolve) => setTimeout(resolve, 500));
 
 			await ctx.ui.custom(

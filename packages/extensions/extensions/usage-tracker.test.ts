@@ -1,8 +1,9 @@
 /**
  * Tests for the usage-tracker extension.
  *
- * Exercises: registration, data collection, threshold alerts, rate limit parsing,
- * widget rendering, session hydration, report generation, and tool/command APIs.
+ * Exercises: registration, data collection, threshold alerts, API rate limit
+ * probing, widget rendering, session hydration, report generation, and
+ * tool/command APIs.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,6 +42,63 @@ vi.mock("@sinclair/typebox", () => ({
 		Literal: (value: any) => ({ const: value }),
 	},
 }));
+
+// ─── Fetch mock ─────────────────────────────────────────────────────────────
+
+const mockFetch = vi.fn().mockResolvedValue({
+	ok: true,
+	status: 200,
+	headers: new Map<string, string>(),
+	json: async () => ({}),
+});
+vi.stubGlobal("fetch", mockFetch);
+
+// ─── Auth helpers ───────────────────────────────────────────────────────────
+
+const AUTH_JSON_PATH = "/mock-home/.pi/agent/auth.json";
+
+function makeAuthJson(overrides: Record<string, any> = {}) {
+	return JSON.stringify({
+		anthropic: {
+			type: "oauth",
+			access: "sk-ant-oat01-test-token",
+			refresh: "sk-ant-ort01-refresh",
+			expires: Date.now() + 86_400_000,
+		},
+		"openai-codex": {
+			type: "oauth",
+			access:
+				// Minimal JWT: header.payload.signature
+				`eyJ0eXAiOiJKV1QifQ.${Buffer.from(JSON.stringify({ "https://api.openai.com/profile": { email: "test@example.com" }, "https://api.openai.com/auth": { chatgpt_plan_type: "pro" } })).toString("base64url")}.sig`,
+			refresh: "rt_test",
+			expires: Date.now() + 86_400_000,
+			accountId: "test-account",
+		},
+		"google-antigravity": {
+			type: "oauth",
+			access: "ya29.test-token",
+			refresh: "1//test-refresh",
+			expires: Date.now() + 86_400_000,
+			projectId: "test-project",
+			email: "test@example.com",
+		},
+		...overrides,
+	});
+}
+
+function makeFetchResponse(opts: { status?: number; ok?: boolean; headers?: Record<string, string> } = {}) {
+	const headers = new Map(Object.entries(opts.headers ?? {}));
+	return {
+		ok:
+			opts.ok ?? (opts.status === undefined || (opts.status !== undefined && opts.status >= 200 && opts.status < 300)),
+		status: opts.status ?? 200,
+		headers: {
+			get: (key: string) => headers.get(key.toLowerCase()) ?? null,
+			...headers,
+		},
+		json: async () => ({}),
+	};
+}
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
 
@@ -163,10 +221,32 @@ describe("usage-tracker extension", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.clearAllMocks();
-		(existsSync as ReturnType<typeof vi.fn>).mockReturnValue(false);
-		(readFileSync as ReturnType<typeof vi.fn>).mockReturnValue("{}");
+		(existsSync as ReturnType<typeof vi.fn>).mockImplementation((path: string) => {
+			if (String(path).includes("auth.json")) {
+				return true;
+			}
+			return false;
+		});
+		(readFileSync as ReturnType<typeof vi.fn>).mockImplementation((path: string) => {
+			if (String(path).includes("auth.json")) {
+				return makeAuthJson();
+			}
+			return "{}";
+		});
 		(mkdirSync as ReturnType<typeof vi.fn>).mockImplementation(() => undefined);
 		(writeFileSync as ReturnType<typeof vi.fn>).mockImplementation(() => undefined);
+		mockFetch.mockResolvedValue(
+			makeFetchResponse({
+				headers: {
+					"anthropic-ratelimit-requests-limit": "50",
+					"anthropic-ratelimit-requests-remaining": "49",
+					"anthropic-ratelimit-requests-reset": new Date(Date.now() + 60_000).toISOString(),
+					"anthropic-ratelimit-tokens-limit": "40000",
+					"anthropic-ratelimit-tokens-remaining": "39900",
+					"anthropic-ratelimit-tokens-reset": new Date(Date.now() + 60_000).toISOString(),
+				},
+			}),
+		);
 		pi = createMockPi();
 		ctx = createMockCtx();
 	});
@@ -412,32 +492,31 @@ describe("usage-tracker extension", () => {
 	});
 
 	describe("rate limit probing", () => {
-		it("triggers Claude probe when using Claude model", () => {
+		it("triggers Anthropic API probe when using Claude model", () => {
 			usageTracker(pi as any);
 			pi._emit("session_start", { type: "session_start" }, ctx);
 
-			// The probe calls pi.exec
-			expect(pi.exec).toHaveBeenCalled();
-			const calls = pi.exec.mock.calls;
-			const claudeCall = calls.find((c: any[]) => c[0] === "claude");
-			expect(claudeCall).toBeDefined();
+			// The probe calls fetch with the Anthropic API URL
+			const fetchCalls = mockFetch.mock.calls;
+			const anthropicCall = fetchCalls.find((c: any[]) => String(c[0]).includes("api.anthropic.com"));
+			expect(anthropicCall).toBeDefined();
 		});
 
-		it("triggers Codex probe when using OpenAI model", () => {
+		it("triggers OpenAI API probe when using OpenAI model", () => {
 			ctx.model = { id: "gpt-4o" } as any;
 			usageTracker(pi as any);
 			pi._emit("session_start", { type: "session_start" }, ctx);
 
-			const calls = pi.exec.mock.calls;
-			const codexCall = calls.find((c: any[]) => c[0] === "codex");
-			expect(codexCall).toBeDefined();
+			const fetchCalls = mockFetch.mock.calls;
+			const openaiCall = fetchCalls.find((c: any[]) => String(c[0]).includes("api.openai.com"));
+			expect(openaiCall).toBeDefined();
 		});
 
 		it("probes again on model_select", () => {
 			usageTracker(pi as any);
 			pi._emit("session_start", { type: "session_start" }, ctx);
 
-			const initialCallCount = pi.exec.mock.calls.length;
+			const initialCallCount = mockFetch.mock.calls.length;
 
 			// Simulate model switch (enough time has passed for cooldown)
 			pi._emit(
@@ -450,7 +529,24 @@ describe("usage-tracker extension", () => {
 			);
 
 			// Should have made new probe calls
-			expect(pi.exec.mock.calls.length).toBeGreaterThanOrEqual(initialCallCount);
+			expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(initialCallCount);
+		});
+
+		it("shows no-auth note when auth.json has no entry for provider", async () => {
+			(readFileSync as ReturnType<typeof vi.fn>).mockImplementation((path: string) => {
+				if (String(path).includes("auth.json")) {
+					return "{}";
+				}
+				return "{}";
+			});
+
+			usageTracker(pi as any);
+			pi._emit("session_start", { type: "session_start" }, ctx);
+
+			const tool = pi._tools.get("usage_report");
+			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
+			const text = result.content[0].text;
+			expect(text).toContain("No pi auth configured for Anthropic");
 		});
 	});
 
@@ -478,17 +574,19 @@ describe("usage-tracker extension", () => {
 			expect(text).toContain("30d:");
 		});
 
-		it("adds CodexBar-style detail lines (pace, constrained window, cache, plan)", async () => {
-			pi.exec.mockImplementation(async (cmd: string) => {
-				if (cmd === "claude") {
-					return {
-						stdout:
-							"Current session 72% remaining resets in 2h\nCurrent week all models 60% remaining resets in 3d 0h\nPlan: Pro\nAccount: dev@example.com",
-						exitCode: 0,
-					};
-				}
-				return { stdout: "", exitCode: 0 };
-			});
+		it("shows rate limit windows from Anthropic API response headers", async () => {
+			mockFetch.mockResolvedValue(
+				makeFetchResponse({
+					headers: {
+						"anthropic-ratelimit-requests-limit": "50",
+						"anthropic-ratelimit-requests-remaining": "36",
+						"anthropic-ratelimit-requests-reset": new Date(Date.now() + 30_000).toISOString(),
+						"anthropic-ratelimit-tokens-limit": "40000",
+						"anthropic-ratelimit-tokens-remaining": "24000",
+						"anthropic-ratelimit-tokens-reset": new Date(Date.now() + 30_000).toISOString(),
+					},
+				}),
+			);
 
 			usageTracker(pi as any);
 			pi._emit("session_start", { type: "session_start" }, ctx);
@@ -498,82 +596,29 @@ describe("usage-tracker extension", () => {
 			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
 			const text = result.content[0].text;
 
+			expect(text).toContain("Anthropic Rate Limits:");
+			expect(text).toContain("Requests");
+			expect(text).toContain("Tokens");
 			expect(text).toContain("Most constrained:");
-			expect(text).toContain("Pace:");
 			expect(text).toContain("Avg/turn:");
 			expect(text).toContain("Cache:");
-			expect(text).toContain("Plan: Pro");
+			expect(text).toContain("Plan: OAuth");
 		});
 
-		it("falls back to claude auth metadata when `claude usage` no longer exposes windows", async () => {
-			pi.exec.mockImplementation(async (cmd: string, args?: string[]) => {
-				if (cmd === "claude" && args?.[0] === "auth" && args?.[1] === "status") {
-					return {
-						stdout: JSON.stringify({
-							loggedIn: true,
-							email: "ifiokotung@gmail.com",
-							subscriptionType: "max",
-						}),
-						exitCode: 0,
-					};
-				}
-				if (cmd === "claude" && args?.[0] === "usage") {
-					return {
-						stdout: 'Could you clarify what you mean by "usage"?',
-						exitCode: 0,
-					};
-				}
-				return { stdout: "", exitCode: 0 };
-			});
-
-			usageTracker(pi as any);
-			pi._emit("session_start", { type: "session_start" }, ctx);
-
-			const tool = pi._tools.get("usage_report");
-			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
-			const text = result.content[0].text;
-
-			expect(text).toContain("Plan: max");
-			expect(text).toContain("Account: ifiokotung@gmail.com");
-			expect(text).toContain("Windows: unavailable");
-		});
-
-		it("classifies Claude API 401 + /login output as auth-required", async () => {
-			pi.exec.mockImplementation(async (cmd: string, args?: string[]) => {
-				if (cmd === "claude" && args?.[0] === "usage") {
-					return {
-						stdout:
-							'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}} Please run /login',
-						exitCode: 1,
-					};
-				}
-				return { stdout: "", exitCode: 0 };
-			});
-
-			usageTracker(pi as any);
-			pi._emit("session_start", { type: "session_start" }, ctx);
-
-			const tool = pi._tools.get("usage_report");
-			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
-			const text = result.content[0].text;
-
-			expect(text).toContain("Claude CLI authentication required or expired; run claude auth login.");
-		});
-
-		it("classifies Codex API 401 + /login output as auth-required", async () => {
+		it("shows OpenAI plan from JWT when auth is configured", async () => {
 			ctx.model = { id: "gpt-4o" } as any;
-			pi.exec.mockImplementation(async (cmd: string, args?: string[]) => {
-				if (cmd === "codex" && args?.[0] === "login" && args?.[1] === "status") {
-					return { stdout: "Not logged in · Please run /login", exitCode: 1 };
-				}
-				if (cmd === "codex") {
-					return {
-						stdout: "Error: Failed to authenticate. API Error: 401. Please run /login",
-						exitCode: 1,
-					};
-				}
-				return { stdout: "", exitCode: 0 };
-			});
+			mockFetch.mockResolvedValue(
+				makeFetchResponse({
+					headers: {
+						"x-ratelimit-limit-requests": "10000",
+						"x-ratelimit-remaining-requests": "9999",
+						"x-ratelimit-reset-requests": "6ms",
+						"x-ratelimit-limit-tokens": "200000",
+						"x-ratelimit-remaining-tokens": "199500",
+						"x-ratelimit-reset-tokens": "100ms",
+					},
+				}),
+			);
 
 			usageTracker(pi as any);
 			pi._emit("session_start", { type: "session_start" }, ctx);
@@ -582,19 +627,47 @@ describe("usage-tracker extension", () => {
 			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
 			const text = result.content[0].text;
 
-			expect(text).toContain("Codex CLI authentication required; run codex login.");
+			expect(text).toContain("OpenAI Rate Limits:");
+			expect(text).toContain("Plan: pro");
+			expect(text).toContain("Account: test@example.com");
 		});
 
-		it("shows codex note when windows need an interactive TTY", async () => {
+		it("shows auth expired error when API returns 401", async () => {
+			mockFetch.mockResolvedValue(makeFetchResponse({ status: 401, ok: false }));
+
+			usageTracker(pi as any);
+			pi._emit("session_start", { type: "session_start" }, ctx);
+
+			const tool = pi._tools.get("usage_report");
+			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
+			const text = result.content[0].text;
+
+			expect(text).toContain("Anthropic auth token expired");
+			expect(text).toContain("re-authenticate in pi settings");
+		});
+
+		it("shows OpenAI auth expired error when API returns 401", async () => {
 			ctx.model = { id: "gpt-4o" } as any;
-			pi.exec.mockImplementation(async (cmd: string, args?: string[]) => {
-				if (cmd === "codex" && args?.[0] === "login" && args?.[1] === "status") {
-					return { stdout: "Logged in using ChatGPT", exitCode: 0 };
+			mockFetch.mockResolvedValue(makeFetchResponse({ status: 401, ok: false }));
+
+			usageTracker(pi as any);
+			pi._emit("session_start", { type: "session_start" }, ctx);
+
+			const tool = pi._tools.get("usage_report");
+			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
+			const text = result.content[0].text;
+
+			expect(text).toContain("OpenAI auth token expired");
+			expect(text).toContain("re-authenticate in pi settings");
+		});
+
+		it("shows no-auth note when provider has no token configured", async () => {
+			ctx.model = { id: "gpt-4o" } as any;
+			(readFileSync as ReturnType<typeof vi.fn>).mockImplementation((path: string) => {
+				if (String(path).includes("auth.json")) {
+					return JSON.stringify({ anthropic: { type: "oauth", access: "sk-test", refresh: "r", expires: 0 } });
 				}
-				if (cmd === "codex") {
-					return { stdout: "Error: stdin is not a terminal", exitCode: 1 };
-				}
-				return { stdout: "", exitCode: 0 };
+				return "{}";
 			});
 
 			usageTracker(pi as any);
@@ -604,9 +677,8 @@ describe("usage-tracker extension", () => {
 			const result = await runWithTimers(() => tool.execute("id", { format: "detailed" }, undefined, undefined, ctx));
 			const text = result.content[0].text;
 
-			expect(text).toContain("Codex Rate Limits:");
-			expect(text).toContain("interactive TTY");
-			expect(text).toContain("Plan: ChatGPT");
+			expect(text).toContain("No pi auth configured for OpenAI");
+			expect(text).toContain("run pi login");
 		});
 	});
 
@@ -672,17 +744,19 @@ describe("usage-tracker extension", () => {
 	});
 
 	describe("/usage command", () => {
-		it("shows overlay with richer CodexBar-style detail sections", async () => {
-			pi.exec.mockImplementation(async (cmd: string) => {
-				if (cmd === "claude") {
-					return {
-						stdout:
-							"Current session 85% remaining resets in 3h\nCurrent week all models 65% remaining resets in 4d 0h\nPlan: Team",
-						exitCode: 0,
-					};
-				}
-				return { stdout: "", exitCode: 0 };
-			});
+		it("shows overlay with rate limit detail sections from API probes", async () => {
+			mockFetch.mockResolvedValue(
+				makeFetchResponse({
+					headers: {
+						"anthropic-ratelimit-requests-limit": "50",
+						"anthropic-ratelimit-requests-remaining": "42",
+						"anthropic-ratelimit-requests-reset": new Date(Date.now() + 45_000).toISOString(),
+						"anthropic-ratelimit-tokens-limit": "40000",
+						"anthropic-ratelimit-tokens-remaining": "26000",
+						"anthropic-ratelimit-tokens-reset": new Date(Date.now() + 45_000).toISOString(),
+					},
+				}),
+			);
 
 			usageTracker(pi as any);
 			pi._emit("session_start", { type: "session_start" }, ctx);
@@ -707,7 +781,7 @@ describe("usage-tracker extension", () => {
 				vi.fn(),
 			);
 			const rendered = component.render(220).join("\n");
-			expect(rendered).toContain("Most constrained:");
+			expect(rendered).toContain("Anthropic Rate Limits");
 			expect(rendered).toContain("Avg");
 			expect(rendered).toContain("Cache");
 			expect(rendered).toContain("Pace");
