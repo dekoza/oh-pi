@@ -10,6 +10,9 @@ export default defineConfig({
 			"packages/plan/tests/**/*.test.ts",
 			"packages/shared-qna/tests/**/*.test.ts",
 			"packages/spec/tests/**/*.test.ts",
+			"packages/web-server/tests/**/*.test.ts",
+			"packages/web-client/tests/**/*.test.ts",
+			"packages/web-remote/tests/**/*.test.ts",
 		],
 	},
 });

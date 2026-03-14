@@ -16,7 +16,7 @@ Both modes share the same protocol, client library, web UI, and security model.
 
 ## User Experience
 
-### Mode A: `/remote` from a Pi Terminal
+### The Only Thing You Need to Know
 
 ```
 $ pi
@@ -30,60 +30,49 @@ $ pi
   │    ▀▀▀▀▀▀▀ █▄▀▄█▄ ▀▀▀▀▀▀▀                │
   │    ...                                   │
   │                                          │
-  │  🌐 http://192.168.1.42:3100?t=a7f3...   │
-  │  🔑 Instance ID: blue-fox-92             │
-  │                                          │
-  │  Scan QR code or open the URL.           │
-  │  /remote stop  — stop sharing            │
-  │  /remote info  — show connection info    │
+  │  Scan to connect.                        │
   │                                          │
   ╰──────────────────────────────────────────╯
 
-  Remote access active. 0 clients connected.
-
-> help me refactor the auth module    ← TUI and web UI both work
+  🌐 Remote active · 0 clients · /remote stop
 ```
 
-The terminal and web client both interact with the **same session**. You can type
-in the terminal while watching from your phone, or vice versa.
+That's it. Scan the QR code with your phone. The web UI opens. You're connected.
+Type on your phone or in the terminal — both work on the same session.
 
-### Mode B: Headless Daemon (Mac Mini / Server)
+Everything else is automatic:
+- Token generated, embedded in the QR URL
+- Server started on a free port
+- If `cloudflared` or `tailscale` is installed, a tunnel is created so it works
+  from outside your network too
+- If not, the LAN IP is used (phone must be on same WiFi)
+- Web UI served from the local server, or from a hosted CDN if a tunnel is active
+
+`/remote stop` tears it all down. `/remote` again shows the QR if already active.
+
+### Headless Mode (Mac Mini / Always-On)
+
+For a pi instance that stays alive permanently:
 
 ```bash
-# Start a long-running instance
-pi-web serve --cwd ~/projects/my-app --port 3100
-
-  ╭─────────────────────────────────────────╮
-  │  pi-web daemon running                  │
-  │                                         │
-  │  🌐 http://mini.local:3100?t=b8e2...    │
-  │  🔑 Instance ID: red-cloud-17           │
-  │                                         │
-  │  Ctrl+C to stop                         │
-  ╰─────────────────────────────────────────╯
+pi-web serve --cwd ~/projects/my-app
 ```
 
-Open the URL on any device — your laptop, phone, tablet. The pi instance stays
-alive on the Mac Mini, ready whenever you are.
+Same idea. QR code appears. Scan it. Run it in tmux or as a system service.
+Token is persisted to `~/.config/pi-web/token` so you can reconnect after
+restarts.
 
-```bash
-# Run as a background service (launchd, systemd, tmux, etc.)
-pi-web serve --cwd ~/projects/my-app --port 3100 --token-file ~/.pi-web-token
+### For App Developers (Future)
 
-# The token is persisted to disk so you can reconnect after restarts
-cat ~/.pi-web-token
-# b8e2d4f1a3c9...
-```
-
-### Mode C: React Native / Mobile App (Future)
+The client library works in browsers, React Native, and Node.js — same API
+everywhere:
 
 ```typescript
 import { PiWebClient } from "@ifi/pi-web-client";
 
-// Same client library works everywhere — browser, Node.js, React Native
-const client = new PiWebClient("ws://mini.local:3100/ws", {
+const client = new PiWebClient({
+  url: "wss://abc123.trycloudflare.com/ws",
   token: "b8e2d4f1a3c9...",
-  autoReconnect: true,
 });
 
 await client.connect();
@@ -91,9 +80,8 @@ client.on("message_update", (e) => { /* render in your app */ });
 await client.prompt("What's the status of the build?");
 ```
 
-The client library has **zero DOM dependencies** — it only uses the WebSocket API
-(native in browsers, React Native, and Node.js 21+). For Node.js <21 or
-environments without native WebSocket, the user passes a WebSocket constructor.
+Zero DOM dependencies. Uses native WebSocket (browser, React Native, Node 21+).
+Pass a WebSocket constructor for older Node.
 
 ---
 
@@ -160,18 +148,15 @@ Client                                 Server
 
 ### QR Code Contents
 
-The QR code encodes a URL with the token as a query parameter. The exact URL
-depends on the deployment model:
+The QR code encodes a single URL. The format is chosen automatically:
 
-**Self-contained** (default):
-```
-http://192.168.1.42:3100?t=a7f3b2c1d4e5f6...
-```
+| Situation | QR URL |
+|-----------|--------|
+| Tunnel available | `https://pi-remote.dev?host=wss://abc.trycloudflare.com&t=TOKEN` |
+| LAN only | `http://192.168.1.42:3100?t=TOKEN` |
 
-**Hosted UI** (`/remote --tunnel --ui https://pi-web.deno.dev`):
-```
-https://pi-web.deno.dev?host=wss://abc123.trycloudflare.com&t=a7f3b2c1d4e5f6...
-```
+The user never chooses between these. `/remote` detects the best option and
+shows one QR code.
 
 The web UI reads `t` from the URL on load, stores it in memory (never in
 localStorage for security), and uses it for the WebSocket `auth` handshake. The
@@ -251,6 +236,7 @@ the agent. This is intentional — it's **your** instance on **your** devices.
 | **MITM on the WebSocket** | TLS (WSS) prevents this. Server validates token on every connection, not just first message. |
 | **Shared machine, different users** | Each user runs their own instance on a different port. OS-level process isolation. |
 | **Token persisted to disk (daemon mode)** | Token file created with `0600` permissions (owner-only read). Path is user-configurable. |
+| **Hosted UI on CDN** | CDN serves static files only. Token goes browser → your pi-web server directly. CDN never sees it. |
 
 ### Optional Hardening (Phase 5)
 
@@ -261,155 +247,69 @@ the agent. This is intentional — it's **your** instance on **your** devices.
 
 ---
 
-## Deployment Models
+## How It Works Under the Hood
 
-The web UI and the pi instance are **architecturally decoupled**. The web UI is
-a static SPA that connects to a pi-web server over WebSocket. This means the UI
-can run anywhere — same machine, Deno Deploy, Vercel, your own CDN — and it's
-still secure.
+The user types `/remote`. Behind the scenes, the extension auto-detects the best
+connectivity strategy. The user never sees any of this.
 
-### Model 1: Self-Contained (Default)
-
-Pi-web serves the UI and the WebSocket from the same origin. Simplest setup.
-Works on LAN, localhost, or behind a reverse proxy.
+### Auto-Detection Logic
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Your machine                                   │
-│                                                 │
-│  ┌──────────────────────────────────┐            │
-│  │  pi-web (:3100)                 │            │
-│  │  ├── GET /        → web UI SPA  │            │
-│  │  ├── GET /api/*   → REST API    │ ◄── Phone  │
-│  │  └── WS  /ws      → agent      │            │
-│  └──────────────────────────────────┘            │
-└─────────────────────────────────────────────────┘
+/remote
+  │
+  ├── 1. Start web server on free port (3100, 3101, ...)
+  │
+  ├── 2. Check for tunnel provider
+  │     ├── cloudflared installed? → start tunnel → get public wss:// URL
+  │     ├── tailscale funnel available? → start funnel → get public wss:// URL
+  │     └── neither? → fall back to LAN
+  │
+  ├── 3. Build QR URL
+  │     ├── Tunnel found:
+  │     │     https://pi-remote.dev?host=wss://abc.trycloudflare.com&t=TOKEN
+  │     │     (works from anywhere — phone doesn't need to be on same WiFi)
+  │     │
+  │     └── LAN only:
+  │           http://192.168.1.42:3100?t=TOKEN
+  │           (phone must be on same WiFi)
+  │
+  └── 4. Display QR code
 ```
 
-### Model 2: Hosted UI + Local Pi (Deno Deploy, Vercel, etc.)
+### Why Hosted UI + Local Pi Is Secure
 
-The web UI is deployed to a CDN. Your pi instance runs wherever your code lives.
-The browser loads the UI from the CDN, then connects directly to your pi-web
-server over WebSocket. **The CDN never sees your token or conversation data.**
-
-```
-┌──────────────────┐   1. Load UI (HTML/JS/CSS)   ┌──────────────────┐
-│  Deno Deploy /   │ ────────────────────────────► │  Your browser    │
-│  Vercel / CDN    │   (static files only)         │                  │
-└──────────────────┘                               │                  │
-                                                   │  2. Read token   │
-     No tokens.                                    │     from URL     │
-     No data.                                      │                  │
-     Just HTML.                                    │  3. Connect WS   │
-                                                   │     directly     │
-┌──────────────────┐   4. wss://mini:3100/ws       │     to pi-web    │
-│  Your Mac Mini   │ ◄──────────────────────────── │                  │
-│  pi-web (:3100)  │   token + all conversation    │                  │
-└──────────────────┘   data flows here only        └──────────────────┘
-```
-
-**Why this is secure:**
-- The hosted UI is a **static SPA** — it has no backend, no API keys, no state.
-  It's just HTML, CSS, and JavaScript served from a CDN.
-- The token travels from QR code → your phone's browser → directly to your
-  pi-web server. Deno Deploy never receives it.
-- All conversation data (prompts, responses, tool output) flows over the
-  WebSocket connection between your browser and your pi-web server. The CDN
-  is completely out of the loop.
-- This is the same security model used by any SPA that connects to a
-  user-specified backend (e.g., Grafana Cloud connecting to your Prometheus).
-
-**What changes in the UI for hosted mode:**
-- On first load, the UI checks for a `host` parameter in the URL:
-  `https://pi-web.deno.dev?host=wss://mini.local:3100&t=a7f3b2c1...`
-- If no `host` param, the UI connects to its own origin (Model 1)
-- If `host` is present, the UI connects to that WebSocket URL instead
-- The QR code in `/remote` encodes the full connection URL including the hosted
-  UI domain and the `host` param
-
-### Model 3: Tunnel (Access From Anywhere)
-
-Your pi instance is on a home network behind NAT. You need it reachable from the
-internet. Use a tunnel to get a public `wss://` URL.
+When a tunnel is available, the QR code points to a hosted UI (e.g., Deno Deploy).
+This is a **static SPA** — just HTML, CSS, and JavaScript served from a CDN.
 
 ```
-┌──────────────────┐   tunnel   ┌────────────────────┐
-│  Your Mac Mini   │ ─────────► │  abc.trycloudflare │
-│  pi-web (:3100)  │            │  .com (public URL) │
-└──────────────────┘            └────────────────────┘
-                                         ▲
-                                         │ wss://
-                                    ┌────┴────┐
-                                    │ Phone   │
-                                    │ (anywhere)
-                                    └─────────┘
+┌──────────────────┐   1. Load UI (static files)   ┌──────────────────┐
+│  pi-remote.dev   │ ─────────────────────────────► │  Your phone      │
+│  (CDN)           │   no tokens, no data           │                  │
+└──────────────────┘                                │  2. Read token   │
+                                                    │     from URL     │
+┌──────────────────┐   3. wss:// direct connection  │                  │
+│  Your machine    │ ◄───────────────────────────── │  3. Connect WS   │
+│  (pi-web)        │   token + conversation here    │     to YOUR      │
+└──────────────────┘   CDN never sees any of it     │     machine      │
+                                                    └──────────────────┘
 ```
 
-Built-in tunnel support via `/remote --tunnel`:
+- The CDN serves files. It never sees your token or conversation data.
+- The token goes browser → your pi-web server directly.
+- All data flows over the WebSocket between your phone and your machine.
+- Same security model as Grafana Cloud connecting to your self-hosted Prometheus.
 
-```bash
-pi
-> /remote --tunnel
+### LAN vs Tunnel
 
-  ╭──────────────────────────────────────────────────╮
-  │                                                  │
-  │  🌐 https://abc123.trycloudflare.com?t=a7f3...   │
-  │  🔑 Instance ID: blue-fox-92                     │
-  │  🔒 Tunnel: Cloudflare (encrypted)               │
-  │                                                  │
-  │  Scan QR code from anywhere.                     │
-  ╰──────────────────────────────────────────────────╯
-```
+| | LAN (no tunnel) | Tunnel (cloudflared/tailscale) |
+|-|-----------------|-------------------------------|
+| **Phone on same WiFi?** | ✅ Required | Not required |
+| **Works from anywhere?** | ❌ | ✅ |
+| **TLS** | Not needed (HTTP) | Auto (HTTPS) |
+| **QR points to** | `http://LAN_IP:PORT` | `https://pi-remote.dev?host=wss://...` |
+| **Install needed** | Nothing | `cloudflared` or `tailscale` |
 
-For daemon mode: `pi-web serve --tunnel`
-
-Tunnel providers (in order of priority):
-1. **Cloudflare Tunnel** (`cloudflared`) — free, no account needed for quick
-   tunnels via `cloudflared tunnel --url http://localhost:3100`
-2. **Tailscale Funnel** — if user already has Tailscale, zero config
-3. **Custom** — `--tunnel-command "ngrok http 3100"` for arbitrary providers
-
-The tunnel gives you a public HTTPS URL, solving three problems at once:
-- NAT traversal (reachable from anywhere)
-- TLS (browsers require `wss://` from `https://` pages)
-- No port forwarding or firewall config
-
-### Combining Models
-
-The hosted UI (Model 2) and tunnels (Model 3) compose naturally:
-
-```bash
-# Hosted UI on Deno Deploy + Cloudflare tunnel for your pi instance
-pi
-> /remote --tunnel --ui https://pi-web.deno.dev
-
-  🌐 https://pi-web.deno.dev?host=wss://abc123.trycloudflare.com&t=a7f3...
-```
-
-Or for the Mac Mini daemon:
-
-```bash
-pi-web serve --cwd ~/projects --tunnel --ui https://pi-web.deno.dev
-```
-
-### HTTPS Requirement
-
-Browsers **block** `ws://` (non-TLS WebSocket) connections from `https://` pages.
-This affects Model 2 (hosted UI is always HTTPS). Solutions:
-
-| Scenario | Solution |
-|----------|----------|
-| Same machine | Model 1 — serve everything from `http://localhost:3100` |
-| LAN, phone scanning QR | Model 1 with `--tls` or a tunnel |
-| Remote access (internet) | Tunnel (auto-provides HTTPS) or reverse proxy |
-| Hosted UI (Deno Deploy) | Pi-web **must** use `wss://` — either `--tls`, tunnel, or reverse proxy |
-
-The `/remote` and `pi-web serve` commands detect when a hosted UI is configured
-and warn if TLS is not enabled:
-
-```
-⚠ Hosted UI requires wss://. Use --tunnel or --tls to enable secure connections.
-```
+The user doesn't choose. `/remote` picks whichever is available.
 
 ---
 
@@ -487,14 +387,15 @@ to remote clients with token-based auth.
   }
 
   interface PiWebServerOptions {
-    port?: number;          // default: 3100
+    port?: number;          // default: auto (3100, then increment)
     host?: string;          // default: "0.0.0.0"
     token?: string;         // auto-generated if not provided
-    tokenFile?: string;     // persist token to file
+    tokenFile?: string;     // persist token to file for daemon restarts
+    tunnel?: boolean;       // default: auto-detect (true if provider found)
     tls?: { cert: string; key: string };
     maxClients?: number;    // default: 5
-    corsOrigin?: string;
     staticDir?: string;     // path to web-ui dist/ assets
+    hostedUiUrl?: string;   // default: "https://pi-remote.dev"
   }
   ```
 
@@ -511,6 +412,7 @@ to remote clients with token-based auth.
   - **Extension UI bridging:** relay `extension_ui_request` to clients, relay
     `extension_ui_response` back to the session
   - **Client tracking:** assign each connection a `clientId`, track connected count
+  - **CORS:** allow connections from `hostedUiUrl` origin if configured
 
 ### 1.5 — REST API
 
@@ -539,15 +441,13 @@ to remote clients with token-based auth.
 ### 1.7 — Daemon CLI Entrypoint
 
 - [ ] `src/bin/pi-web.ts` — `pi-web serve` command
-  - Parse flags: `--cwd`, `--port`, `--host`, `--token-file`, `--tls-cert`,
-    `--tls-key`, `--max-clients`, `--tunnel`, `--tunnel-command`,
-    `--ui <url>` (hosted UI origin)
+  - Minimal required: `pi-web serve --cwd ~/projects/my-app`
+  - Optional overrides: `--port`, `--host`, `--token-file`, `--no-tunnel`
+  - Auto-detect tunnel + LAN IP (same logic as `/remote` extension)
   - Create a pi session via `createAgentSession()` with full SDK
   - Attach it to `PiWebServer`
-  - If `--tunnel`: start tunnel, use public URL in QR code
-  - If `--ui`: embed hosted UI origin + `host` param in QR code URL
-  - Display connection info (URL, QR code, instance ID)
-  - Warn if `--ui` is HTTPS but no TLS/tunnel configured
+  - Display QR code + URL
+  - Persist token to `~/.config/pi-web/token` by default
   - Graceful shutdown on SIGINT/SIGTERM — save session, stop tunnel, stop server
 
 ### 1.8 — Tests
@@ -562,10 +462,10 @@ to remote clients with token-based auth.
 ### Phase 1 Deliverable
 
 ```bash
-# Daemon mode
-pi-web serve --cwd ~/projects/my-app --port 3100
+# Start a daemon — auto-detects tunnel, shows QR code
+pi-web serve --cwd ~/projects/my-app
 
-# Connect with any WebSocket client
+# Under the hood, WebSocket protocol works like this:
 wscat -c ws://localhost:3100/ws
 > {"type":"auth","token":"a7f3b2c1..."}
 < {"type":"auth_ok","instanceId":"blue-fox-92","session":{...}}
@@ -579,8 +479,8 @@ wscat -c ws://localhost:3100/ws
 
 ## Phase 2 — `/remote` Extension
 
-**Goal:** A pi extension that registers the `/remote` command, starts the embedded
-web server, and displays a QR code + URL in the terminal.
+**Goal:** A pi extension that registers the `/remote` command. One command,
+zero config. Starts the server, detects connectivity, shows a QR code.
 
 ### 2.1 — Scaffold `packages/web-remote/`
 
@@ -595,47 +495,47 @@ web server, and displays a QR code + URL in the terminal.
 ### 2.2 — Extension Implementation
 
 - [ ] `index.ts` — Main extension
-  - **`/remote` command** — starts the web server, attaches the current session
-    ```
-    /remote              — start sharing (or show info if already sharing)
-    /remote --tunnel     — start with a public tunnel (cloudflared/tailscale)
-    /remote stop         — stop sharing
-    /remote info         — show QR code + URL + connected clients
-    /remote token        — regenerate token (disconnects all clients)
-    ```
-  - **QR code display** — uses `ctx.ui.custom()` to render QR code in the
-    terminal as a temporary overlay, then sets a persistent status indicator
-  - **Status line** — shows `🌐 Remote: 2 clients` in the footer via
-    `ctx.ui.setStatus("remote", ...)`
-  - **Session lifecycle** — on `session_shutdown`, stop the web server. On
+  - **`/remote`** — the only command the user needs to know
+    - If not active: start server + show QR code
+    - If already active: re-show QR code + connected client count
+    - `/remote stop` — tear everything down
+  - **Auto-detect everything on start:**
+    1. Find a free port (start at 3100, increment if taken)
+    2. Generate token
+    3. Check for tunnel provider (`cloudflared` → `tailscale` → none)
+    4. If tunnel found: start it, build QR URL as
+       `https://pi-remote.dev?host=wss://TUNNEL_URL&t=TOKEN`
+    5. If no tunnel: get LAN IP, build QR URL as
+       `http://LAN_IP:PORT?t=TOKEN`
+    6. Show QR code via `ctx.ui.custom()` overlay (auto-dismiss after 15s)
+  - **Status line** — persistent `🌐 Remote: 2 clients` in footer via
+    `ctx.ui.setStatus()`
+  - **Session lifecycle** — on `session_shutdown`, stop server + tunnel. On
     `session_switch`, detach old session, attach new one.
-  - **Client notifications** — when a client connects/disconnects, show a
-    `ctx.ui.notify()` in the terminal
-  - **Port flag** — `pi.registerFlag("remote-port", { type: "string", default: "3100" })`
+  - **Client connect/disconnect** — `ctx.ui.notify()` toast in terminal
 
-### 2.3 — Permission Gate Integration
+### 2.3 — Permission Gate
 
 - [ ] When remote clients are connected, dangerous tool calls (`rm -rf`, `sudo`,
-  sensitive path writes) trigger `ctx.ui.confirm()` — which in RPC/extension UI
-  mode sends an `extension_ui_request` to the connected web clients.
-- [ ] The terminal user can also approve/deny if they're watching.
-- [ ] Add `--remote-allow-bash` flag to skip bash confirmation for trusted setups.
+  sensitive path writes) trigger `ctx.ui.confirm()` which routes to the web
+  client as an `extension_ui_request` dialog. Terminal user can also approve.
 
 ### 2.4 — Tests
 
-- [ ] `tests/remote.test.ts` — command parsing, server lifecycle within extension
+- [ ] `tests/remote.test.ts` — auto-detect logic, server lifecycle
 
 ### Phase 2 Deliverable
 
 ```bash
 pi
 > /remote
-# QR code + URL shown in terminal
-# Open URL on phone → full web UI connected to this session
-> /remote info
-# Shows connected clients
+# QR code appears. Scan it. Done.
+
+> /remote
+# Already active — shows QR again + "2 clients connected"
+
 > /remote stop
-# Stops sharing
+# Everything stops
 ```
 
 ---
@@ -881,20 +781,17 @@ pi
 - [ ] `/` trigger in chat input with autocomplete
 - [ ] List from `getCommands()`
 
-### 5.3 — Security Hardening
+### 5.3 — Security Hardening (Internal — No User Config)
 
-- [ ] `--allowed-ips` — restrict by IP/CIDR
-- [ ] `--token-ttl` — auto-expire tokens
-- [ ] `--max-clients` — connection limit
-- [ ] `--read-only` — observe mode
-- [ ] Audit log of all commands
+- [ ] Auto-expire tokens after 30 days for daemon mode (re-run to refresh)
+- [ ] Max 5 concurrent clients (hard limit, not configurable)
+- [ ] Audit log to `~/.config/pi-web/audit.log`
 
-### 5.4 — Daemon Management
+### 5.4 — Hosted UI Deployment
 
-- [ ] `pi-web list` — show running daemon instances
-- [ ] `pi-web stop <instance-id>` — stop a daemon
-- [ ] `pi-web token <instance-id>` — show token for a running instance
-- [ ] launchd/systemd service template generation
+- [ ] Publish and maintain `https://pi-remote.dev` (static SPA on Deno Deploy)
+  so `/remote` with tunnel just works — no user deployment needed
+- [ ] Vercel / Netlify / Deno Deploy adapters for self-hosting the UI
 
 ### 5.5 — React Native Starter
 

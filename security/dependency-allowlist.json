@@ -4,16 +4,20 @@
 	"packages": [
 		"@biomejs/biome",
 		"@clack/prompts",
+		"@hono/node-server",
 		"@mariozechner/pi-agent-core",
 		"@mariozechner/pi-ai",
 		"@mariozechner/pi-coding-agent",
 		"@mariozechner/pi-tui",
 		"@sinclair/typebox",
 		"@types/node",
+		"@types/ws",
 		"@typescript/native-preview",
 		"chalk",
 		"croner",
+		"hono",
 		"typescript",
-		"vitest"
+		"vitest",
+		"ws"
 	]
 }

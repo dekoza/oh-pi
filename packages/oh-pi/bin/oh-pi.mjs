@@ -21,6 +21,7 @@ const PACKAGES = [
 	"@ifi/oh-pi-themes",
 	"@ifi/oh-pi-prompts",
 	"@ifi/oh-pi-skills",
+	"@ifi/pi-web-remote",
 ];
 
 function parseArgs(argv) {

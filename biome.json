@@ -18,7 +18,12 @@
 			"packages/plan/tests/**/*.ts",
 			"packages/shared-qna/tests/**/*.ts",
 			"packages/spec/extension/**/*.ts",
-			"packages/spec/tests/**/*.ts"
+			"packages/spec/tests/**/*.ts",
+			"packages/web-server/src/**/*.ts",
+			"packages/web-server/tests/**/*.ts",
+			"packages/web-client/src/**/*.ts",
+			"packages/web-client/tests/**/*.ts",
+			"packages/web-remote/**/*.ts"
 		]
 	},
 	"formatter": {

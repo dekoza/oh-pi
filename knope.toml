@@ -20,6 +20,9 @@ versioned_files = [
   "packages/plan/package.json",
   "packages/spec/package.json",
   "packages/oh-pi/package.json",
+  "packages/web-server/package.json",
+  "packages/web-remote/package.json",
+  "packages/web-client/package.json",
 ]
 changelog = "CHANGELOG.md"
 
