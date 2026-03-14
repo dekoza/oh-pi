@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.16 (2026-03-14)
+
+### Fixes
+
+- avoid shortcut conflict with subagents
+- Change the ant-colony details shortcut from `Ctrl+Shift+A` to `Ctrl+Shift+C` so it no longer conflicts with the subagents extension shortcut.
+
 ## 0.2.15 (2026-03-14)
 
 ### Features
