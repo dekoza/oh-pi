@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4 (2026-03-24)
+
+### Fixes
+
+- truncate usage widget lines by terminal width (#18)
+- Fix usage-tracker widget line truncation by respecting the terminal `width` in widget `render(width)` and applying `truncateAnsi` to each rendered line. This prevents crashes from overlong widget lines when multiple provider bars are displayed in narrow terminals.
+
 ## 0.3.3 (2026-03-23)
 
 ### Fixes
