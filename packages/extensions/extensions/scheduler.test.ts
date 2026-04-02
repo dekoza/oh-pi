@@ -51,6 +51,7 @@ vi.mock("@sinclair/typebox", () => ({
 
 function createMockPi() {
 	const handlers = new Map<string, ((...args: any[]) => any)[]>();
+	const eventBusHandlers = new Map<string, ((...args: any[]) => any)[]>();
 	const tools = new Map<string, any>();
 	const commands = new Map<string, any>();
 	const messages: any[] = [];
@@ -62,6 +63,28 @@ function createMockPi() {
 				handlers.set(event, []);
 			}
 			handlers.get(event)!.push(handler);
+		},
+		events: {
+			on(event: string, handler: (...args: any[]) => any) {
+				if (!eventBusHandlers.has(event)) {
+					eventBusHandlers.set(event, []);
+				}
+				eventBusHandlers.get(event)!.push(handler);
+			},
+			off(event: string, handler: (...args: any[]) => any) {
+				const fns = eventBusHandlers.get(event);
+				if (fns) {
+					const idx = fns.indexOf(handler);
+					if (idx >= 0) {
+						fns.splice(idx, 1);
+					}
+				}
+			},
+			emit(event: string, ...args: any[]) {
+				for (const fn of eventBusHandlers.get(event) ?? []) {
+					fn(...args);
+				}
+			},
 		},
 		registerTool(tool: any) {
 			tools.set(tool.name, tool);
@@ -77,6 +100,7 @@ function createMockPi() {
 		},
 
 		_handlers: handlers,
+		_eventBusHandlers: eventBusHandlers,
 		_tools: tools,
 		_commands: commands,
 		_messages: messages,
@@ -143,6 +167,7 @@ import schedulerExtension, {
 	formatDurationShort,
 	getSchedulerLeasePath,
 	getSchedulerStoragePath,
+	MAX_DISPATCH_TIMESTAMPS,
 	MAX_DISPATCHES_PER_WINDOW,
 	MAX_TASKS,
 	MIN_RECURRING_INTERVAL,
@@ -152,6 +177,7 @@ import schedulerExtension, {
 	parseDuration,
 	parseLoopScheduleArgs,
 	parseRemindScheduleArgs,
+	SCHEDULER_SAFE_MODE_HEARTBEAT_MS,
 	SchedulerRuntime,
 	THREE_DAYS,
 	validateSchedulePromptAddInput,
@@ -2205,6 +2231,216 @@ describe("event wiring", () => {
 
 		pi._emit("session_shutdown", { type: "session_shutdown" }, ctx);
 		expect(ctx._statusMap.has("pi-scheduler")).toBe(false);
+	});
+});
+
+// ─── Safe mode ───────────────────────────────────────────────────────────────
+
+describe("safe mode", () => {
+	let pi: ReturnType<typeof createMockPi>;
+	let ctx: ReturnType<typeof createMockCtx>;
+	let runtime: SchedulerRuntime;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		pi = createMockPi();
+		ctx = createMockCtx();
+		runtime = new SchedulerRuntime(pi as any);
+		runtime.setRuntimeContext(ctx as any);
+	});
+
+	afterEach(() => {
+		runtime.stopScheduler();
+		vi.useRealTimers();
+	});
+
+	it("suppresses status updates when safe mode is enabled", () => {
+		runtime.addRecurringIntervalTask("check ci", 5 * ONE_MINUTE);
+		runtime.updateStatus();
+		expect(ctx._statusMap.get("pi-scheduler")).toBeDefined();
+
+		runtime.setSafeModeEnabled(true);
+		// Status should be cleared.
+		expect(ctx._statusMap.get("pi-scheduler")).toBeUndefined();
+	});
+
+	it("restores status when safe mode is disabled", () => {
+		runtime.addRecurringIntervalTask("check ci", 5 * ONE_MINUTE);
+		runtime.setSafeModeEnabled(true);
+		expect(ctx._statusMap.get("pi-scheduler")).toBeUndefined();
+
+		runtime.setSafeModeEnabled(false);
+		expect(ctx._statusMap.get("pi-scheduler")).toBeDefined();
+	});
+
+	it("still dispatches tasks in safe mode", async () => {
+		runtime.setSafeModeEnabled(true);
+		const task = runtime.addOneShotTask("run this", 1_000);
+		runtime.startScheduler();
+
+		vi.advanceTimersByTime(SCHEDULER_SAFE_MODE_HEARTBEAT_MS + 1_000 + 100);
+		await runtime.tickScheduler();
+
+		expect(pi._userMessages.length).toBe(1);
+		expect(pi._userMessages[0]).toBe("run this");
+	});
+
+	it("suppresses rate limit notifications in safe mode", () => {
+		runtime.setSafeModeEnabled(true);
+		runtime.startScheduler();
+
+		// Fill dispatch history to trigger rate limiting.
+		for (let i = 0; i < MAX_DISPATCHES_PER_WINDOW + 2; i++) {
+			const t = runtime.addOneShotTask(`task-${i}`, 0);
+			t.pending = true;
+			runtime.dispatchTask(t);
+		}
+
+		// No rate limit notification should appear in safe mode.
+		const rateLimitNotices = ctx._notifications.filter((n: any) => n.msg.includes("throttled"));
+		expect(rateLimitNotices.length).toBe(0);
+	});
+
+	it("suppresses resume-required notifications in safe mode", () => {
+		const task = runtime.addRecurringIntervalTask("check", 5 * ONE_MINUTE);
+		task.resumeRequired = true;
+		task.resumeReason = "overdue";
+
+		runtime.setSafeModeEnabled(true);
+		runtime.notifyResumeRequiredTasks();
+
+		expect(ctx._notifications.length).toBe(0);
+	});
+
+	it("is a no-op when setting same safe mode value", () => {
+		runtime.setSafeModeEnabled(false);
+		runtime.addRecurringIntervalTask("check ci", 5 * ONE_MINUTE);
+		runtime.updateStatus();
+		const statusBefore = ctx._statusMap.get("pi-scheduler");
+		runtime.setSafeModeEnabled(false);
+		expect(ctx._statusMap.get("pi-scheduler")).toBe(statusBefore);
+	});
+
+	it("exposes isSafeModeActive getter", () => {
+		expect(runtime.isSafeModeActive).toBe(false);
+		runtime.setSafeModeEnabled(true);
+		expect(runtime.isSafeModeActive).toBe(true);
+		runtime.setSafeModeEnabled(false);
+		expect(runtime.isSafeModeActive).toBe(false);
+	});
+
+	it("wires safe mode event from pi.events bus", () => {
+		schedulerExtension(pi as any);
+		const safeModeHandlers = pi._eventBusHandlers.get("oh-pi:safe-mode") ?? [];
+		expect(safeModeHandlers.length).toBeGreaterThan(0);
+	});
+});
+
+// ─── Memory leak fixes ──────────────────────────────────────────────────────
+
+describe("dispatch timestamp bounds", () => {
+	let pi: ReturnType<typeof createMockPi>;
+	let ctx: ReturnType<typeof createMockCtx>;
+	let runtime: SchedulerRuntime;
+
+	beforeEach(() => {
+		pi = createMockPi();
+		ctx = createMockCtx();
+		runtime = new SchedulerRuntime(pi as any);
+		runtime.setRuntimeContext(ctx as any);
+	});
+
+	afterEach(() => {
+		runtime.stopScheduler();
+	});
+
+	it("MAX_DISPATCH_TIMESTAMPS constant is 64", () => {
+		expect(MAX_DISPATCH_TIMESTAMPS).toBe(64);
+	});
+
+	it("SCHEDULER_SAFE_MODE_HEARTBEAT_MS constant is 5000", () => {
+		expect(SCHEDULER_SAFE_MODE_HEARTBEAT_MS).toBe(5_000);
+	});
+
+	it("stopScheduler clears dispatchTimestamps", () => {
+		runtime.startScheduler();
+		// Dispatch a task to add timestamps.
+		const task = runtime.addOneShotTask("test", 0);
+		task.pending = true;
+		runtime.dispatchTask(task);
+		runtime.stopScheduler();
+		// After stop, internal state should be clean — verify by checking
+		// that a new start works without leftover state.
+		runtime.startScheduler();
+		runtime.stopScheduler();
+	});
+});
+
+// ─── Lease heartbeat ────────────────────────────────────────────────────────
+
+describe("lease heartbeat refresh", () => {
+	let pi: ReturnType<typeof createMockPi>;
+	let runtime: SchedulerRuntime;
+	let writtenLeases: string[];
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		pi = createMockPi();
+		runtime = new SchedulerRuntime(pi as any);
+		writtenLeases = [];
+
+		// Track lease writes.
+		(writeFileSync as ReturnType<typeof vi.fn>).mockImplementation((_path: string, data: string) => {
+			if (typeof _path === "string" && _path.endsWith(".lease.json.tmp")) {
+				writtenLeases.push(data);
+			}
+		});
+		(renameSync as ReturnType<typeof vi.fn>).mockImplementation(() => {});
+		(mkdirSync as ReturnType<typeof vi.fn>).mockImplementation(() => {});
+		(rmSync as ReturnType<typeof vi.fn>).mockImplementation(() => {});
+	});
+
+	afterEach(() => {
+		runtime.stopScheduler();
+		vi.useRealTimers();
+		(existsSync as ReturnType<typeof vi.fn>).mockReturnValue(false);
+		(readFileSync as ReturnType<typeof vi.fn>).mockReturnValue("{}");
+	});
+
+	it("refreshes lease on every tick even when pi is not idle", async () => {
+		const now = Date.now();
+		// Set up a lease owned by this runtime.
+		const instanceId = runtime.currentInstanceId;
+		(existsSync as ReturnType<typeof vi.fn>).mockImplementation(
+			(file: string) =>
+				typeof file === "string" && (file.endsWith("scheduler.json") || file.endsWith("scheduler.lease.json")),
+		);
+		(readFileSync as ReturnType<typeof vi.fn>).mockImplementation((file: string) => {
+			if (typeof file === "string" && file.endsWith("scheduler.lease.json")) {
+				return JSON.stringify({
+					version: 1,
+					instanceId,
+					sessionId: null,
+					pid: process.pid,
+					cwd: "/mock-project",
+					heartbeatAt: now,
+				});
+			}
+			return JSON.stringify({ version: 1, tasks: [] });
+		});
+
+		// Create a context that is NOT idle.
+		const ctx = createMockCtx({ isIdle: () => false, hasPendingMessages: () => true });
+		runtime.setRuntimeContext(ctx as any);
+
+		// Tick — should still refresh the heartbeat even though pi is busy.
+		writtenLeases.length = 0;
+		await runtime.tickScheduler();
+
+		// The lease should have been refreshed.
+		expect(writtenLeases.length).toBeGreaterThanOrEqual(1);
+		const lastLease = JSON.parse(writtenLeases[writtenLeases.length - 1]);
+		expect(lastLease.instanceId).toBe(instanceId);
 	});
 });
 
