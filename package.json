@@ -24,7 +24,8 @@
 		"lint": "biome check --error-on-warnings .",
 		"lint:fix": "biome check --fix .",
 		"format": "biome format --write .",
-		"check": "biome ci --error-on-warnings ."
+		"check": "biome ci --error-on-warnings .",
+		"pack:all": "pnpm build && node ./scripts/pack-all.mjs"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.10",
