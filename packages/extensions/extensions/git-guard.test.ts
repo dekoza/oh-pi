@@ -19,6 +19,7 @@ describe("detectInteractiveGitCommand", () => {
 	it("ignores non-git shell text that merely mentions git", () => {
 		expect(detectInteractiveGitCommand('echo "git commit"')).toBeNull();
 		expect(detectInteractiveGitCommand("printf 'git rebase --continue'\n")).toBeNull();
+		expect(detectInteractiveGitCommand("git merge-tree base head")).toBeNull();
 	});
 
 	it("detects git merge without --no-edit or explicit message", () => {

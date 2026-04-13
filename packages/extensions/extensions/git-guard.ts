@@ -60,7 +60,7 @@ export function detectInteractiveGitCommand(command: string): InteractiveGitDete
 		}
 
 		if (
-			/^git\s+rebase\b/.test(gitCommand) &&
+			/^git\s+rebase(\s|$)/.test(gitCommand) &&
 			/(^|\s)--continue(\s|$)/.test(gitCommand) &&
 			!hasNonInteractiveEditorOverride(segment)
 		) {
@@ -72,7 +72,7 @@ export function detectInteractiveGitCommand(command: string): InteractiveGitDete
 		}
 
 		if (
-			/^git\s+commit\b/.test(gitCommand) &&
+			/^git\s+commit(\s|$)/.test(gitCommand) &&
 			!hasExplicitCommitMessage(gitCommand) &&
 			!/(^|\s)--no-edit(\s|$)/.test(gitCommand) &&
 			!hasNonInteractiveEditorOverride(segment)
@@ -84,7 +84,7 @@ export function detectInteractiveGitCommand(command: string): InteractiveGitDete
 		}
 
 		if (
-			/^git\s+merge\b/.test(gitCommand) &&
+			/^git\s+merge(\s|$)/.test(gitCommand) &&
 			!hasExplicitMergeMessage(gitCommand) &&
 			!hasNonInteractiveEditorOverride(segment)
 		) {
@@ -95,7 +95,7 @@ export function detectInteractiveGitCommand(command: string): InteractiveGitDete
 		}
 
 		if (
-			/^git\s+tag\b/.test(gitCommand) &&
+			/^git\s+tag(\s|$)/.test(gitCommand) &&
 			/(^|\s)(-a|--annotate|-s|--sign)(\s|$)/.test(gitCommand) &&
 			!hasExplicitTagMessage(gitCommand) &&
 			!hasNonInteractiveEditorOverride(segment)
