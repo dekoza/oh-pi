@@ -74,8 +74,8 @@ export const DEFAULT_FALLBACK_GROUPS: Record<string, FallbackGroupPolicy> = {
 		description: "Low-cost classifier and quick-turn routing pool.",
 	},
 	"design-premium": {
-		candidates: ["anthropic/claude-opus-4.6", "openai/gpt-5.4"],
-		description: "Premium design-focused routing pool.",
+		candidates: ["google/gemini-3.1-pro-preview", "google/gemini-2.5-pro", "anthropic/claude-opus-4.6"],
+		description: "Visual and design-focused routing pool.",
 	},
 	"peak-reasoning": {
 		candidates: ["openai/gpt-5.4", "anthropic/claude-opus-4.6", "cursor-agent/<best-available>"],

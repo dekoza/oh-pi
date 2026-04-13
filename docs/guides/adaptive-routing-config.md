@@ -36,7 +36,7 @@ Built-in defaults after `/route init`:
 | `quick-discovery` | Cheap exploration, broad search | `minimal` | Flash, Mini |
 | `balanced-execution` | Implementation and task execution | `medium` | Sonnet, Pro |
 | `review-critical` | Review, criticism, quality checks | `high` | Opus, GPT-5.4 |
-| `visual-engineering` | UI/visual design work | `high` | Opus, GPT-5.4 |
+| `visual-engineering` | UI/visual design work | `high` | Gemini 3.1 Pro, Gemini 2.5 Pro |
 | `peak-reasoning` | Architecture, autonomous planning | `xhigh` | Opus, GPT-5.4 |
 
 These names match the ant-colony caste and worker-class defaults, so colony routing works
@@ -79,7 +79,7 @@ This is the smallest config that routes agents:
         "defaultThinking": "high"
       },
       "visual-engineering": {
-        "candidates": ["anthropic/claude-opus-4.6", "openai/gpt-5.4"],
+        "candidates": ["google/gemini-3.1-pro-preview", "google/gemini-2.5-pro", "anthropic/claude-opus-4.6"],
         "defaultThinking": "high"
       },
       "peak-reasoning": {
@@ -169,7 +169,7 @@ If an agent has both `model:` and `category:`, the explicit model wins and the c
         "defaultThinking": "high"
       },
       "visual-engineering": {
-        "candidates": ["anthropic/claude-opus-4.6", "openai/gpt-5.4"],
+        "candidates": ["google/gemini-3.1-pro-preview", "google/gemini-2.5-pro", "anthropic/claude-opus-4.6"],
         "defaultThinking": "high"
       },
       "peak-reasoning": {
@@ -202,7 +202,7 @@ If an agent has both `model:` and `category:`, the explicit model wins and the c
         "defaultThinking": "high"
       },
       "visual-engineering": {
-        "candidates": ["anthropic/claude-opus-4.6"],
+        "candidates": ["google/gemini-3.1-pro-preview", "anthropic/claude-opus-4.6"],
         "defaultThinking": "high"
       },
       "peak-reasoning": {
@@ -235,7 +235,7 @@ If an agent has both `model:` and `category:`, the explicit model wins and the c
         "defaultThinking": "high"
       },
       "visual-engineering": {
-        "candidates": ["anthropic/claude-opus-4.6", "anthropic/claude-sonnet-4.6"],
+        "candidates": ["google/gemini-3.1-pro-preview", "anthropic/claude-opus-4.6", "anthropic/claude-sonnet-4.6"],
         "defaultThinking": "high"
       },
       "peak-reasoning": {

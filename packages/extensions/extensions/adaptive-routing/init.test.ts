@@ -45,6 +45,17 @@ describe("generateDefaultConfig", () => {
 		expect(categories["review-critical"]?.candidates).toContain("openai/gpt-5.4");
 	});
 
+	it("prefers gemini-3.1-pro-preview for visual-engineering", () => {
+		const modelsWithGemini = [
+			...allModels,
+			{ provider: "google", id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", reasoning: true, cost: { input: 1 } },
+		];
+		const config = generateDefaultConfig(modelsWithGemini);
+		const visual = config.delegatedRouting.categories["visual-engineering"];
+
+		expect(visual?.candidates![0]).toBe("google/gemini-3.1-pro-preview");
+	});
+
 	it("sets appropriate thinking levels per category", () => {
 		const config = generateDefaultConfig(allModels);
 		const { categories } = config.delegatedRouting;
