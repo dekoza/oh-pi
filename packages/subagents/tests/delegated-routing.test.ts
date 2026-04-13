@@ -32,18 +32,29 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	if (savedHome === undefined) unsetEnv("HOME");
-	else process.env.HOME = savedHome;
+	if (savedHome === undefined) {
+		unsetEnv("HOME");
+	} else {
+		process.env.HOME = savedHome;
+	}
 
-	if (savedUserProfile === undefined) unsetEnv("USERPROFILE");
-	else process.env.USERPROFILE = savedUserProfile;
+	if (savedUserProfile === undefined) {
+		unsetEnv("USERPROFILE");
+	} else {
+		process.env.USERPROFILE = savedUserProfile;
+	}
 
-	if (savedAgentDir === undefined) unsetEnv("PI_CODING_AGENT_DIR");
-	else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	if (savedAgentDir === undefined) {
+		unsetEnv("PI_CODING_AGENT_DIR");
+	} else {
+		process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	}
 
 	while (tempDirs.length > 0) {
 		const dir = tempDirs.pop();
-		if (!dir) continue;
+		if (!dir) {
+			continue;
+		}
 		fs.rmSync(dir, { recursive: true, force: true });
 	}
 });
