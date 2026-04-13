@@ -84,6 +84,7 @@ function normalizeAdaptiveRoutingConfigWithWarnings(raw: unknown): NormalizedCon
 			taskClasses: normalizeTaskClasses(cfg.taskClasses, fallback.taskClasses),
 			providerReserves: normalizeProviderReserves(cfg.providerReserves, fallback.providerReserves),
 			fallbackGroups: normalizeFallbackGroups(cfg.fallbackGroups, fallback.fallbackGroups),
+			delegatedRouting: normalizeDelegatedRouting(cfg.delegatedRouting, fallback.delegatedRouting, warnings),
 		},
 		warnings,
 	};
@@ -277,6 +278,58 @@ function normalizeFallbackGroupPolicy(
 	return {
 		candidates,
 		description: normalizeOptionalString(value.description, fallback?.description),
+	};
+}
+
+function normalizeDelegatedRouting(
+	value: unknown,
+	fallback: AdaptiveRoutingConfig["delegatedRouting"],
+	warnings?: string[],
+): AdaptiveRoutingConfig["delegatedRouting"] {
+	if (!value || typeof value !== "object") {
+		if (value !== undefined) {
+			warnings?.push("Skipped invalid delegatedRouting section; using fallback.");
+		}
+		return {
+			enabled: fallback.enabled,
+			categories: { ...fallback.categories },
+		};
+	}
+
+	const cfg = value as Record<string, unknown>;
+	const categories: AdaptiveRoutingConfig["delegatedRouting"]["categories"] = { ...fallback.categories };
+	if (cfg.categories && typeof cfg.categories === "object") {
+		for (const [name, policy] of Object.entries(cfg.categories as Record<string, unknown>)) {
+			if (!policy || typeof policy !== "object") {
+				continue;
+			}
+			const normalized = normalizeDelegatedCategoryPolicy(policy as Record<string, unknown>, categories[name]);
+			if (normalized) {
+				categories[name] = normalized;
+			}
+		}
+	}
+
+	return {
+		enabled: typeof cfg.enabled === "boolean" ? cfg.enabled : fallback.enabled,
+		categories,
+	};
+}
+
+function normalizeDelegatedCategoryPolicy(
+	value: Record<string, unknown>,
+	fallback?: AdaptiveRoutingConfig["delegatedRouting"]["categories"][string],
+): AdaptiveRoutingConfig["delegatedRouting"]["categories"][string] | undefined {
+	const taskClass = normalizeOptionalString(value.taskClass, fallback?.taskClass);
+	const fallbackGroup = normalizeOptionalString(value.fallbackGroup, fallback?.fallbackGroup);
+	const defaultThinking = normalizeOptionalThinking(value.defaultThinking, fallback?.defaultThinking);
+	if (!(taskClass || fallbackGroup || defaultThinking)) {
+		return fallback;
+	}
+	return {
+		taskClass,
+		fallbackGroup,
+		defaultThinking,
 	};
 }
 

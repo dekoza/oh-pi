@@ -1,6 +1,7 @@
 import type {
 	AdaptiveRoutingConfig,
 	AdaptiveRoutingExplanationCode,
+	DelegatedRoutingConfig,
 	FallbackGroupPolicy,
 	IntentRoutingPolicy,
 	RouteIntent,
@@ -80,6 +81,21 @@ export const DEFAULT_FALLBACK_GROUPS: Record<string, FallbackGroupPolicy> = {
 		candidates: ["openai/gpt-5.4", "anthropic/claude-opus-4.6", "cursor-agent/<best-available>"],
 		description: "Peak reasoning pool with premium cross-provider fallbacks.",
 	},
+	"standard-coding": {
+		candidates: ["anthropic/claude-sonnet-4.6", "openai/gpt-5-mini", "google/gemini-2.5-pro"],
+		description: "Balanced coding pool for delegated implementation work.",
+	},
+};
+
+export const DEFAULT_DELEGATED_ROUTING_CONFIG: DelegatedRoutingConfig = {
+	enabled: false,
+	categories: {
+		"quick-discovery": { taskClass: "quick" },
+		"balanced-execution": { fallbackGroup: "standard-coding", defaultThinking: "medium" },
+		"review-critical": { fallbackGroup: "peak-reasoning", defaultThinking: "high" },
+		"peak-reasoning": { taskClass: "peak", defaultThinking: "xhigh" },
+		"visual-engineering": { fallbackGroup: "design-premium", defaultThinking: "high" },
+	},
 };
 
 export const DEFAULT_ADAPTIVE_ROUTING_CONFIG: AdaptiveRoutingConfig = {
@@ -123,4 +139,5 @@ export const DEFAULT_ADAPTIVE_ROUTING_CONFIG: AdaptiveRoutingConfig = {
 		},
 	},
 	fallbackGroups: DEFAULT_FALLBACK_GROUPS,
+	delegatedRouting: DEFAULT_DELEGATED_ROUTING_CONFIG,
 };
