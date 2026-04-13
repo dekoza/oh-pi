@@ -89,6 +89,15 @@ The `thinking` field sets a default extended thinking level for the agent. At ru
 
 The optional `category` field is delegated-routing metadata. It does nothing by itself. It only participates in model selection when adaptive-routing config enables delegated routing and defines a matching category policy.
 
+Routing precedence stays explicit:
+
+1. runtime `model` override
+2. explicit agent `model`
+3. delegated `category` routing
+4. current session model fallback
+
+Agent detail surfaces now show the effective route and warn when a category is inactive because an explicit model wins.
+
 **Extension sandboxing**
 
 Use `extensions` in frontmatter to control which extensions a subagent can access:
@@ -143,6 +152,8 @@ The MCP adapter's metadata cache must be populated for direct tools to work. On 
 | `/chain agent1 "task1" -> agent2 "task2"` | Run agents in sequence with per-step tasks |
 | `/parallel agent1 "task1" -> agent2 "task2"` | Run agents in parallel with per-step tasks |
 | `/agents` | Open the Agents Manager overlay |
+
+The execution renderer also shows delegated route summaries when routing selected the effective model.
 
 All commands validate agent names locally and tab-complete them, then route through the tool framework for full live progress rendering. Results are sent to the conversation for the LLM to discuss.
 
@@ -221,7 +232,7 @@ Press **Ctrl+Shift+A** or type `/agents` to open the Agents Manager overlay — 
 
 **List screen keybindings:**
 - `↑↓` — navigate agents/chains
-- `Enter` — view detail
+- `Enter` — view detail (includes effective route + routing warnings)
 - Type any character — search/filter
 - `Tab` — toggle selection (agents only)
 - `Ctrl+N` — new agent from template

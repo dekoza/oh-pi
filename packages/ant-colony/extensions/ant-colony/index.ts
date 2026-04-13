@@ -219,7 +219,10 @@ export default function antColonyExtension(pi: ExtensionAPI) {
 		return header ? `${header}\n\n${report}` : report;
 	};
 
-	const formatAntRouteSummary = (ant: { model: string; route?: { routeSource: string; requestedCategory?: string } }) => {
+	const formatAntRouteSummary = (ant: {
+		model: string;
+		route?: { routeSource: string; requestedCategory?: string };
+	}) => {
 		const parts = [ant.model, `via ${ant.route?.routeSource ?? "none"}`];
 		if (ant.route?.requestedCategory) {
 			parts.push(`(${ant.route.requestedCategory})`);
