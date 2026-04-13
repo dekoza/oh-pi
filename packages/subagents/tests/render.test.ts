@@ -5,8 +5,15 @@ vi.mock("@mariozechner/pi-coding-agent", () => ({
 }));
 
 vi.mock("@mariozechner/pi-tui", () => ({
-	Container: class {},
-	Markdown: class {},
+	Container: class {
+		children: unknown[] = [];
+		addChild(child: unknown) {
+			this.children.push(child);
+		}
+	},
+	Markdown: class {
+		constructor(public text: string) {}
+	},
 	Spacer: class {},
 	Text: class {
 		constructor(public text: string) {}
@@ -30,7 +37,7 @@ vi.mock("../utils.js", () => ({
 	getLastActivity: () => "recent activity",
 }));
 
-import { renderWidget } from "../render.js";
+import { renderSubagentResult, renderWidget } from "../render.js";
 import { WIDGET_KEY } from "../types.js";
 
 function createCtx() {
@@ -89,5 +96,46 @@ describe("subagent async widget rendering", () => {
 		const lines = ctx._widgets.get(WIDGET_KEY) as string[];
 		expect(lines[0]).toContain("Async subagents");
 		expect(lines.join("\n")).toContain("recent activity");
+	});
+});
+
+describe("renderSubagentResult route summaries", () => {
+	it("shows the delegated route summary for single-agent results", () => {
+		const widget: any = renderSubagentResult(
+			{
+				content: [{ type: "text", text: "done" }],
+				details: {
+					mode: "single",
+					results: [
+						{
+							agent: "scout",
+							task: "scan repo",
+							exitCode: 0,
+							messages: [],
+							usage: { input: 1, output: 2, total: 3 },
+							route: {
+								routeSource: "agent-category",
+								selectedModel: "google/gemini-2.5-flash",
+								requestedCategory: "quick-discovery",
+								normalizedCategory: "quick",
+								fallbackGroup: "cheap-router",
+							},
+						},
+					],
+				},
+			} as any,
+			{ expanded: true },
+			{
+				fg: (_color: string, text: string) => text,
+				bold: (text: string) => text,
+			} as any,
+		);
+
+		const texts = widget.children
+			.filter((child: any) => typeof child?.text === "string")
+			.map((child: any) => child.text)
+			.join("\n");
+		expect(texts).toContain("Route: category quick-discovery → google/gemini-2.5-flash");
+		expect(texts).toContain("fallback: cheap-router");
 	});
 });

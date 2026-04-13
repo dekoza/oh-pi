@@ -7,6 +7,7 @@ import * as path from "node:path";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { AgentConfig } from "./agents.js";
+import { resolveDelegatedModelSelection, type AvailableModelRef } from "./delegated-routing.js";
 import {
 	ChainClarifyComponent,
 	type ChainClarifyResult,
@@ -152,6 +153,11 @@ export async function executeChain(params: ChainExecutionParams): Promise<ChainE
 		provider: m.provider,
 		id: m.id,
 		fullId: `${m.provider}/${m.id}`,
+	}));
+	const availableModelRefs: AvailableModelRef[] = availableModels.map((m) => ({
+		provider: m.provider,
+		id: m.id,
+		fullId: m.fullId,
 	}));
 	const availableSkills = discoverAvailableSkills(ctx.cwd);
 
@@ -324,13 +330,13 @@ export async function executeChain(params: ChainExecutionParams): Promise<ChainE
 				// Assemble final task: prefix (READ/WRITE instructions) + task + suffix
 				taskStr = prefix + taskStr + suffix;
 
-				// Resolve model to full provider/model format for consistent display
+				// Resolve model via delegated routing precedence
 				const taskAgentConfig = agents.find((a) => a.name === task.agent);
 				const inheritedModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
-				const effectiveModel =
-					(task.model ? resolveModelFullId(task.model, availableModels) : null) ??
-					resolveModelFullId(taskAgentConfig?.model, availableModels) ??
-					resolveModelFullId(inheritedModel, availableModels);
+				const route = resolveDelegatedModelSelection(taskAgentConfig ?? {}, availableModelRefs, {
+					runtimeModel: task.model ? resolveModelFullId(task.model, availableModels) : undefined,
+					fallbackModel: resolveModelFullId(inheritedModel, availableModels),
+				});
 
 				const r = await runSync(ctx.cwd, agents, task.agent, taskStr, {
 					cwd: task.cwd ?? cwd,
@@ -341,7 +347,7 @@ export async function executeChain(params: ChainExecutionParams): Promise<ChainE
 					share: shareEnabled,
 					artifactsDir: artifactConfig.enabled ? artifactsDir : undefined,
 					artifactConfig,
-					modelOverride: effectiveModel,
+					modelOverride: route.selectedModel,
 					skills: behavior.skills === false ? [] : behavior.skills,
 					onUpdate: onUpdate
 						? (p) => {
@@ -363,6 +369,7 @@ export async function executeChain(params: ChainExecutionParams): Promise<ChainE
 						: undefined,
 				});
 
+				r.route = route;
 				if (r.exitCode !== 0 && failFast) {
 					aborted = true;
 				}
@@ -480,11 +487,10 @@ export async function executeChain(params: ChainExecutionParams): Promise<ChainE
 			// Assemble final task: prefix (READ/WRITE instructions) + task + suffix (progress, previous summary)
 			stepTask = prefix + stepTask + suffix;
 
-			// Resolve model: TUI override (already full format) or agent's model resolved to full format
-			const effectiveModel =
-				tuiOverride?.model ??
-				(seqStep.model ? resolveModelFullId(seqStep.model, availableModels) : null) ??
-				resolveModelFullId(agentConfig.model, availableModels);
+			// Resolve model via delegated routing precedence
+			const route = resolveDelegatedModelSelection(agentConfig, availableModelRefs, {
+				runtimeModel: tuiOverride?.model ?? (seqStep.model ? resolveModelFullId(seqStep.model, availableModels) : undefined),
+			});
 
 			// Run step
 			const r = await runSync(ctx.cwd, agents, seqStep.agent, stepTask, {
@@ -496,7 +502,7 @@ export async function executeChain(params: ChainExecutionParams): Promise<ChainE
 				share: shareEnabled,
 				artifactsDir: artifactConfig.enabled ? artifactsDir : undefined,
 				artifactConfig,
-				modelOverride: effectiveModel,
+				modelOverride: route.selectedModel,
 				skills: behavior.skills === false ? [] : behavior.skills,
 				onUpdate: onUpdate
 					? (p) => {
@@ -517,6 +523,7 @@ export async function executeChain(params: ChainExecutionParams): Promise<ChainE
 						}
 					: undefined,
 			});
+			r.route = route;
 			recordRun(seqStep.agent, cleanTask, r.exitCode, r.progressSummary?.durationMs ?? 0);
 
 			globalTaskIndex++;

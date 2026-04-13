@@ -1019,7 +1019,7 @@ export class AgentManagerComponent implements Component {
 			case "detail": {
 				const entry = this.getAgentEntry(this.currentAgentId);
 				if (!entry) return renderList(this.listState, this.listAgents(), w, this.theme, this.statusMessage);
-				return renderDetail(this.detailState, entry.config, this.agentData.cwd, w, this.theme);
+				return renderDetail(this.detailState, entry.config, this.agentData.cwd, w, this.theme, this.models);
 			}
 			case "chain-detail": {
 				const entry = this.getChainEntry(this.currentChainId);

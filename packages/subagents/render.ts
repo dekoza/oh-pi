@@ -7,6 +7,7 @@ import { getMarkdownTheme, type ExtensionContext } from "@mariozechner/pi-coding
 import { Container, Markdown, Spacer, Text, truncateToWidth, visibleWidth, type Widget } from "@mariozechner/pi-tui";
 import { type AsyncJobState, type Details, MAX_WIDGET_JOBS, WIDGET_KEY } from "./types.js";
 import { formatTokens, formatUsage, formatDuration, formatToolCall, shortenPath } from "./formatters.js";
+import { formatDelegatedRouteSummary } from "./route-explanation.js";
 import { getFinalOutput, getDisplayItems, getOutputTail, getLastActivity } from "./utils.js";
 
 type Theme = ExtensionContext["ui"]["theme"];
@@ -231,6 +232,10 @@ export function renderSubagentResult(
 		if (r.skillsWarning) {
 			c.addChild(new Text(truncLine(theme.fg("warning", `[!] ${r.skillsWarning}`), w), 0, 0));
 		}
+		const singleRouteSummary = formatDelegatedRouteSummary(r.route);
+		if (singleRouteSummary) {
+			c.addChild(new Text(truncLine(theme.fg("dim", `Route: ${singleRouteSummary}`), w), 0, 0));
+		}
 		c.addChild(new Text(truncLine(theme.fg("dim", formatUsage(r.usage, r.model)), w), 0, 0));
 		if (r.sessionFile) {
 			c.addChild(new Text(truncLine(theme.fg("dim", `Session: ${shortenPath(r.sessionFile)}`), w), 0, 0));
@@ -390,6 +395,10 @@ export function renderSubagentResult(
 		}
 		if (r.skillsWarning) {
 			c.addChild(new Text(truncLine(theme.fg("warning", `    [!] ${r.skillsWarning}`), w), 0, 0));
+		}
+		const stepRouteSummary = formatDelegatedRouteSummary(r.route);
+		if (stepRouteSummary) {
+			c.addChild(new Text(truncLine(theme.fg("dim", `    route: ${stepRouteSummary}`), w), 0, 0));
 		}
 
 		if (rRunning && rProg) {

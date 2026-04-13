@@ -18,6 +18,7 @@ import * as path from "node:path";
 import { type ExtensionAPI, type ExtensionContext, type ToolDefinition } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { type AgentConfig, type AgentScope, discoverAgents, discoverAgentsAll } from "./agents.js";
+import { resolveDelegatedModelSelection, type AvailableModelRef } from "./delegated-routing.js";
 import { resolveExecutionAgentScope } from "./agent-scope.js";
 import {
 	cleanupOldChainDirs,
@@ -282,7 +283,16 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 					};
 				}
 				const id = randomUUID();
-				const asyncCtx = { pi, cwd: ctx.cwd, currentSessionId: currentSessionId! };
+				const asyncCtx = {
+					pi,
+					cwd: ctx.cwd,
+					currentSessionId: currentSessionId!,
+					availableModels: ctx.modelRegistry.getAvailable().map((m) => ({
+						provider: m.provider,
+						id: m.id,
+						fullId: `${m.provider}/${m.id}`,
+					})),
+				};
 
 				if (hasChain && params.chain) {
 					const normalized = normalizeSkillInput(params.skill);
@@ -323,6 +333,7 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 						artifactConfig,
 						shareEnabled,
 						sessionRoot,
+						model: params.model as string | undefined,
 						skills: (() => {
 							const normalized = normalizeSkillInput(params.skill);
 							if (normalized === false) return [];
@@ -375,7 +386,16 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 						};
 					}
 					const id = randomUUID();
-					const asyncCtx = { pi, cwd: ctx.cwd, currentSessionId: currentSessionId! };
+					const asyncCtx = {
+						pi,
+						cwd: ctx.cwd,
+						currentSessionId: currentSessionId!,
+						availableModels: ctx.modelRegistry.getAvailable().map((m) => ({
+							provider: m.provider,
+							id: m.id,
+							fullId: `${m.provider}/${m.id}`,
+						})),
+					};
 					return executeAsyncChain(id, {
 						chain: chainResult.requestedAsync.chain,
 						agents,
@@ -419,7 +439,7 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 				// Mutable copies for TUI modifications
 				let tasks = params.tasks.map((t) => t.task);
 				const inheritedModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
-				const modelOverrides: (string | undefined)[] = params.tasks.map((t) => (t as { model?: string }).model ?? inheritedModel);
+				const modelOverrides: (string | undefined)[] = params.tasks.map((t) => (t as { model?: string }).model);
 				// Initialize skill overrides from task-level skill params (may be overridden by TUI)
 				const skillOverrides: (string[] | false | undefined)[] = params.tasks.map((t) =>
 					normalizeSkillInput((t as { skill?: string | string[] | boolean }).skill),
@@ -509,12 +529,21 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 
 				// Execute with overrides (tasks array has same length as params.tasks)
 				const behaviors = agentConfigs.map((c) => resolveStepBehavior(c, {}));
+				const availableModels: AvailableModelRef[] = ctx.modelRegistry.getAvailable().map((m) => ({
+					provider: m.provider,
+					id: m.id,
+					fullId: `${m.provider}/${m.id}`,
+				}));
 				const liveResults: (SingleResult | undefined)[] = new Array(params.tasks.length).fill(undefined);
 				const liveProgress: (AgentProgress | undefined)[] = new Array(params.tasks.length).fill(undefined);
 				const results = await mapConcurrent(params.tasks, MAX_CONCURRENCY, async (t, i) => {
 					const overrideSkills = skillOverrides[i];
 					const effectiveSkills = overrideSkills === undefined ? behaviors[i]?.skills : overrideSkills;
-					return runSync(ctx.cwd, agents, t.agent, tasks[i]!, {
+					const route = resolveDelegatedModelSelection(agentConfigs[i]!, availableModels, {
+						runtimeModel: modelOverrides[i],
+						fallbackModel: inheritedModel,
+					});
+					const result = await runSync(ctx.cwd, agents, t.agent, tasks[i]!, {
 						cwd: t.cwd ?? params.cwd,
 						signal,
 						runId,
@@ -524,7 +553,7 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 						artifactsDir: artifactConfig.enabled ? artifactsDir : undefined,
 						artifactConfig,
 						maxOutput: params.maxOutput,
-						modelOverride: modelOverrides[i],
+						modelOverride: route.selectedModel,
 						skills: effectiveSkills === false ? [] : effectiveSkills,
 						onUpdate: onUpdate
 							? (p) => {
@@ -546,6 +575,8 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 								}
 							: undefined,
 					});
+					result.route = route;
+					return result;
 				});
 				for (let i = 0; i < results.length; i++) {
 					const run = results[i]!;
@@ -605,7 +636,8 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 				}
 
 				let task = params.task!;
-				let modelOverride: string | undefined = (params.model as string | undefined) ?? (ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined);
+				let runtimeModelOverride: string | undefined = params.model as string | undefined;
+				const fallbackModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
 				let skillOverride: string[] | false | undefined = normalizeSkillInput(params.skill);
 				// Normalize output: true means "use default" (same as undefined), false means disable
 				const rawOutput = params.output !== undefined ? params.output : agentConfig.output;
@@ -648,7 +680,7 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 					// Apply TUI overrides
 					task = result.templates[0]!;
 					const override = result.behaviorOverrides[0];
-					if (override?.model) modelOverride = override.model;
+					if (override?.model) runtimeModelOverride = override.model;
 					if (override?.output !== undefined) effectiveOutput = override.output;
 					if (override?.skills !== undefined) skillOverride = override.skills;
 
@@ -681,6 +713,7 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 							sessionRoot,
 							skills: skillOverride === false ? [] : skillOverride,
 							output: effectiveOutput,
+							model: runtimeModelOverride,
 						});
 					}
 				}
@@ -690,6 +723,15 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 				task = injectSingleOutputInstruction(task, outputPath);
 
 				const effectiveSkills = skillOverride === false ? [] : skillOverride === undefined ? undefined : skillOverride;
+				const availableModels: AvailableModelRef[] = ctx.modelRegistry.getAvailable().map((m) => ({
+					provider: m.provider,
+					id: m.id,
+					fullId: `${m.provider}/${m.id}`,
+				}));
+				const route = resolveDelegatedModelSelection(agentConfig, availableModels, {
+					runtimeModel: runtimeModelOverride,
+					fallbackModel,
+				});
 
 				const r = await runSync(ctx.cwd, agents, params.agent!, task, {
 					cwd: params.cwd,
@@ -701,9 +743,10 @@ MANAGEMENT (use action field — omit agent/task/chain/tasks):
 					artifactConfig,
 					maxOutput: params.maxOutput,
 					onUpdate,
-					modelOverride,
+					modelOverride: route.selectedModel,
 					skills: effectiveSkills,
 				});
+				r.route = route;
 				recordRun(params.agent!, cleanTask, r.exitCode, r.progressSummary?.durationMs ?? 0);
 
 				if (r.progress) allProgress.push(r.progress);
