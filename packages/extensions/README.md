@@ -77,8 +77,13 @@ Adaptive routing adds a user-friendly `/route` command set and an opt-in model-a
 - suggest routes in shadow mode before automatically applying them
 - persist local-only telemetry and feedback under shared pi storage
 
+**Configuration guide:** [`docs/guides/adaptive-routing-config.md`](../../docs/guides/adaptive-routing-config.md)
+
+Quick setup: run `/route init` to generate a config from available models, then `/route on` to enable.
+
 Key commands:
 
+- `/route init`
 - `/route status`
 - `/route shadow`
 - `/route auto`
