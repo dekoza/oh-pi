@@ -3,6 +3,41 @@
 > A self-organizing multi-agent system modeled after real ant colony ecology. Adaptive concurrency,
 > pheromone communication, zero centralized scheduling.
 
+## When to use ant-colony
+
+Use `@ifi/oh-pi-ant-colony` when:
+- the task is large enough to justify decomposition and background execution
+- you want a swarm that can keep working while you continue chatting
+- you want isolated worktree execution by default
+- you want colony status, resume, and stop controls
+
+Do **not** use ant-colony when you really want explicit, hand-authored chains and per-step control. That is `@ifi/pi-extension-subagents`.
+
+## Quick start
+
+Inside pi:
+
+```text
+/colony Add tests for the auth module and fix the failures
+/colony-status
+/colony-stop all
+```
+
+Suggested first run:
+1. start a colony with a concrete goal
+2. check `/colony-status`
+3. wait for `[COLONY_SIGNAL:...]` follow-ups
+4. stop it only if the goal or environment changed
+
+## Verification checklist
+
+After install, verify:
+- `/colony-count` exists
+- `/colony-status` exists
+- `/colony-stop` exists
+- `/colony-resume` exists
+- the `ant_colony` tool is available
+
 ## Architecture
 
 ```
@@ -101,6 +136,14 @@ Models real ant colony dynamic recruitment:
 
 ## Usage
 
+### Command chooser
+
+- `/colony <goal>` — start work
+- `/colony-status [id]` — inspect a specific running colony or all colonies
+- `/colony-stop [id|all]` — stop one or all running colonies
+- `/colony-resume [colonyId]` — resume saved colonies
+- `/colony-count` — quick count of active colonies
+
 ### Auto-Trigger
 
 The LLM automatically invokes the `ant_colony` tool when task complexity warrants it.
@@ -126,10 +169,72 @@ Ctrl+Shift+A                Open colony details panel
 /colony Refactor auth system from session-based to JWT, maintaining API compatibility
 ```
 
+Good goals are concrete and outcome-oriented. Bad goals are vague commands like "work on the repo".
+
 ## Usage Tracking Integration
 
 Ant inference usage (tokens + cost) is streamed to the `usage-tracker` extension via `pi.events` (`usage:record`).
 So `/usage`, `usage_report`, and session cost totals now include background colony inference, making colony spend visible.
+
+## Delegated model routing
+
+When adaptive routing delegated routing is enabled, ant-colony can resolve models by caste or worker class instead of hard-coding provider/model pairs.
+
+Default routing categories:
+
+- `scout` → `quick-discovery`
+- `worker` → `balanced-execution`
+- `soldier` → `review-critical`
+- `design` workers → `visual-engineering`
+- `multimodal` workers → `quick-discovery`
+- `backend` workers → `balanced-execution`
+- `review` workers → `review-critical`
+
+Explicit model overrides still win. If delegated routing cannot resolve a model, the colony falls back to the current session model.
+
+You can override the default category mapping in `~/.pi/agent/extensions/ant-colony/config.json`:
+
+```json
+{
+  "routingCategories": {
+    "castes": {
+      "scout": "review-critical"
+    },
+    "workerClasses": {
+      "design": "visual-engineering",
+      "review": "review-critical"
+    }
+  }
+}
+```
+
+Adaptive-routing policy stays in `~/.pi/agent/extensions/adaptive-routing/config.json`.
+
+`/colony-status` and the final report surface effective route details when available, so you can tell whether a running ant is using an explicit override, a worker-class category, or a caste category.
+
+## Troubleshooting quick hits
+
+### Colony fails immediately with no model available
+
+The current pi session does not have a usable model selected. Fix the session model first.
+
+### Worktree isolation does not happen
+
+That is a fallback path, not necessarily a bug. Ant-colony falls back to shared cwd behavior when a worktree cannot be created and records the reason.
+
+### Delegated routing does not change the model
+
+Check the precedence first:
+1. explicit model override
+2. worker-class category
+3. caste category
+4. current session model fallback
+
+If you expected category routing, verify both the ant-colony category mapping and the adaptive-routing delegated policy.
+
+### Resume finds nothing
+
+There may be no resumable colonies in the selected storage mode/location.
 
 ## Pheromone System
 

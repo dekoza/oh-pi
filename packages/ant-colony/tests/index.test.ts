@@ -349,6 +349,58 @@ describe("ant-colony extension commands", () => {
 		expect(msg).toContain("Status goal");
 	});
 
+	it("/colony-status includes active ant route details", async () => {
+		const colonyCmd = pi._commands.get("colony");
+		await colonyCmd.handler("Route goal", ctx);
+
+		runInvocations[0].opts.callbacks.onAntSpawn(
+			{
+				id: "worker-1",
+				caste: "worker",
+				status: "working",
+				taskId: "t-1",
+				pid: null,
+				model: "openai/gpt-5.4",
+				route: {
+					routeSource: "worker-class-category",
+					selectedModel: "openai/gpt-5.4",
+					requestedCategory: "review-critical",
+					normalizedCategory: "review-critical",
+					fallbackGroup: "peak-reasoning",
+					candidateModels: ["openai/gpt-5.4"],
+				},
+				usage: { input: 0, output: 0, cost: 0, turns: 0 },
+				startedAt: Date.now(),
+				finishedAt: null,
+			},
+			{
+				id: "t-1",
+				parentId: null,
+				title: "Review auth",
+				description: "Check edge cases",
+				caste: "worker",
+				status: "active",
+				priority: 1,
+				files: ["auth.ts"],
+				claimedBy: "worker-1",
+				result: null,
+				error: null,
+				spawnedTasks: [],
+				createdAt: Date.now(),
+				startedAt: Date.now(),
+				finishedAt: null,
+			},
+		);
+
+		const statusCmd = pi._commands.get("colony-status");
+		await statusCmd.handler("", ctx);
+
+		const msg = ctx._notifications.at(-1)?.msg ?? "";
+		expect(msg).toContain("openai/gpt-5.4");
+		expect(msg).toContain("worker-class-category");
+		expect(msg).toContain("review-critical");
+	});
+
 	it("emits COMPLETE for success and FAILED for failure reports", async () => {
 		const colonyCmd = pi._commands.get("colony");
 		await colonyCmd.handler("Success mission", ctx);

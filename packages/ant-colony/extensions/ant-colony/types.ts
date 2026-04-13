@@ -29,6 +29,19 @@ export const DEFAULT_ANT_CONFIGS: Record<AntCaste, Omit<AntConfig, "systemPrompt
 
 export type WorkerClass = "design" | "multimodal" | "backend" | "review";
 
+export const DEFAULT_CASTE_ROUTING_CATEGORIES: Partial<Record<Exclude<AntCaste, "drone">, string>> = {
+	scout: "quick-discovery",
+	worker: "balanced-execution",
+	soldier: "review-critical",
+};
+
+export const DEFAULT_WORKER_CLASS_ROUTING_CATEGORIES: Record<WorkerClass, string> = {
+	design: "visual-engineering",
+	multimodal: "quick-discovery",
+	backend: "balanced-execution",
+	review: "review-critical",
+};
+
 /** Per-caste / per-worker-class model overrides from user config */
 export type ModelOverrides = Partial<Record<AntCaste | WorkerClass, string>>;
 
@@ -80,6 +93,16 @@ export interface Pheromone {
 // ═══ Ant Instances ═══
 export type AntStatus = "idle" | "working" | "done" | "failed";
 
+export interface AntRoutingInfo {
+	routeSource: "model-override" | "worker-class-category" | "caste-category" | "fallback-model" | "none";
+	selectedModel?: string;
+	requestedCategory?: string;
+	normalizedCategory?: string;
+	fallbackGroup?: string;
+	candidateModels?: string[];
+	overrideKey?: AntCaste | WorkerClass;
+}
+
 export interface Ant {
 	id: string;
 	caste: AntCaste;
@@ -87,6 +110,7 @@ export interface Ant {
 	taskId: string | null;
 	pid: number | null;
 	model: string;
+	route?: AntRoutingInfo;
 	usage: { input: number; output: number; cost: number; turns: number };
 	startedAt: number;
 	finishedAt: number | null;

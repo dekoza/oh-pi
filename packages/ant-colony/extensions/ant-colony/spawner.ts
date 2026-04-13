@@ -28,7 +28,16 @@ import {
 import type { Nest } from "./nest.js";
 import { extractPheromones, type ParsedSubTask, parseSubTasks } from "./parser.js";
 import { buildPrompt, CASTE_PROMPTS } from "./prompts.js";
-import type { Ant, AntCaste, AntConfig, AntStreamEvent, AntUsageEvent, DroneCommandPolicy, Task } from "./types.js";
+import type {
+	Ant,
+	AntCaste,
+	AntConfig,
+	AntRoutingInfo,
+	AntStreamEvent,
+	AntUsageEvent,
+	DroneCommandPolicy,
+	Task,
+} from "./types.js";
 
 let antCounter = 0;
 
@@ -272,7 +281,7 @@ export async function spawnAnt(
 	cwd: string,
 	nest: Nest,
 	task: Task,
-	antConfig: Omit<AntConfig, "systemPrompt">,
+	antConfig: Omit<AntConfig, "systemPrompt"> & { route?: AntRoutingInfo },
 	signal?: AbortSignal,
 	onStream?: (event: AntStreamEvent) => void,
 	onUsage?: (event: AntUsageEvent) => void,
@@ -291,6 +300,7 @@ export async function spawnAnt(
 		taskId: task.id,
 		pid: null,
 		model: antConfig.model,
+		route: antConfig.route,
 		usage: { input: 0, output: 0, cost: 0, turns: 0 },
 		startedAt: Date.now(),
 		finishedAt: null,
