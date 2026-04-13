@@ -7,6 +7,7 @@ export const KNOWN_FIELDS = new Set([
 	"tools",
 	"model",
 	"thinking",
+	"category",
 	"skill",
 	"skills",
 	"extensions",
@@ -33,6 +34,7 @@ export function serializeAgent(config: AgentConfig): string {
 
 	if (config.model) lines.push(`model: ${config.model}`);
 	if (config.thinking && config.thinking !== "off") lines.push(`thinking: ${config.thinking}`);
+	if (config.category) lines.push(`category: ${config.category}`);
 
 	const skillsValue = joinComma(config.skills);
 	if (skillsValue) lines.push(`skills: ${skillsValue}`);

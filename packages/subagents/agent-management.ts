@@ -285,6 +285,11 @@ function applyAgentConfig(target: AgentConfig, cfg: Record<string, unknown>): st
 		else if (typeof cfg.thinking === "string") target.thinking = cfg.thinking.trim() || undefined;
 		else return "config.thinking must be a string or false when provided.";
 	}
+	if (hasKey(cfg, "category")) {
+		if (cfg.category === false || cfg.category === "") target.category = undefined;
+		else if (typeof cfg.category === "string") target.category = cfg.category.trim() || undefined;
+		else return "config.category must be a string or false when provided.";
+	}
 	if (hasKey(cfg, "output")) {
 		if (cfg.output === false || cfg.output === "") target.output = undefined;
 		else if (typeof cfg.output === "string") target.output = cfg.output;
@@ -373,6 +378,7 @@ export function formatAgentDetail(agent: AgentConfig): string {
 		`Description: ${agent.description}`,
 	];
 	if (agent.model) lines.push(`Model: ${agent.model}`);
+	if (agent.category) lines.push(`Category: ${agent.category}`);
 	if (tools.length) lines.push(`Tools: ${tools.join(", ")}`);
 	if (agent.skills?.length) lines.push(`Skills: ${agent.skills.join(", ")}`);
 	if (agent.extensions !== undefined)
