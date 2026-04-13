@@ -31,6 +31,10 @@ function toRootRelative(packageJsonPath: string, entry: string): string {
 	return `./${path.posix.join(packageDir, entry.replace(/^\.\//, ""))}`;
 }
 
+function readLockfile(): string {
+	return readFileSync(path.join(repoRoot, "pnpm-lock.yaml"), "utf8");
+}
+
 describe("git-install package manifest", () => {
 	it("aggregates the standalone pi packages at the repo root", () => {
 		const rootManifest = readPackageJson("package.json");
@@ -86,5 +90,17 @@ describe("git-install package manifest", () => {
 				}
 			}
 		}
+	});
+
+	it("links internal workspace packages in the pnpm lockfile", () => {
+		const lockfile = readLockfile();
+		expect(lockfile).toContain("packages/ant-colony:");
+		expect(lockfile).toContain("specifier: 0.4.4\n        version: link:../core");
+		expect(lockfile).toContain("packages/subagents:");
+		expect(lockfile).toContain("packages/web-remote:");
+		expect(lockfile).toContain("specifier: 0.4.4\n        version: link:../web-server");
+		expect(lockfile).toContain("packages/plan:");
+		expect(lockfile).toContain("specifier: 0.4.4\n        version: link:../subagents");
+		expect(lockfile).toContain("specifier: 0.4.4\n        version: link:../shared-qna");
 	});
 });
