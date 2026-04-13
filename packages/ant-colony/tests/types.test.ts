@@ -4,7 +4,11 @@ import type {
 	PromoteFinalizeGateDecision,
 	PromoteFinalizeGateInput,
 } from "../extensions/ant-colony/types.js";
-import { DEFAULT_ANT_CONFIGS } from "../extensions/ant-colony/types.js";
+import {
+	DEFAULT_ANT_CONFIGS,
+	DEFAULT_CASTE_ROUTING_CATEGORIES,
+	DEFAULT_WORKER_CLASS_ROUTING_CATEGORIES,
+} from "../extensions/ant-colony/types.js";
 
 describe("promote/finalize gate types", () => {
 	it("supports machine-readable input/output contracts", () => {
@@ -57,5 +61,19 @@ describe("DEFAULT_ANT_CONFIGS", () => {
 	it("drone only has bash with 1 turn", () => {
 		expect(DEFAULT_ANT_CONFIGS.drone.tools).toEqual(["bash"]);
 		expect(DEFAULT_ANT_CONFIGS.drone.maxTurns).toBe(1);
+	});
+
+	it("defines default delegated routing categories for castes and worker classes", () => {
+		expect(DEFAULT_CASTE_ROUTING_CATEGORIES).toEqual({
+			scout: "quick-discovery",
+			worker: "balanced-execution",
+			soldier: "review-critical",
+		});
+		expect(DEFAULT_WORKER_CLASS_ROUTING_CATEGORIES).toEqual({
+			design: "visual-engineering",
+			multimodal: "quick-discovery",
+			backend: "balanced-execution",
+			review: "review-critical",
+		});
 	});
 });

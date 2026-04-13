@@ -131,6 +131,40 @@ Ctrl+Shift+A                Open colony details panel
 Ant inference usage (tokens + cost) is streamed to the `usage-tracker` extension via `pi.events` (`usage:record`).
 So `/usage`, `usage_report`, and session cost totals now include background colony inference, making colony spend visible.
 
+## Delegated model routing
+
+When adaptive routing delegated routing is enabled, ant-colony can resolve models by caste or worker class instead of hard-coding provider/model pairs.
+
+Default routing categories:
+
+- `scout` → `quick-discovery`
+- `worker` → `balanced-execution`
+- `soldier` → `review-critical`
+- `design` workers → `visual-engineering`
+- `multimodal` workers → `quick-discovery`
+- `backend` workers → `balanced-execution`
+- `review` workers → `review-critical`
+
+Explicit model overrides still win. If delegated routing cannot resolve a model, the colony falls back to the current session model.
+
+You can override the default category mapping in `~/.pi/agent/extensions/ant-colony/config.json`:
+
+```json
+{
+  "routingCategories": {
+    "castes": {
+      "scout": "review-critical"
+    },
+    "workerClasses": {
+      "design": "visual-engineering",
+      "review": "review-critical"
+    }
+  }
+}
+```
+
+Adaptive-routing policy stays in `~/.pi/agent/extensions/adaptive-routing/config.json`.
+
 ## Pheromone System
 
 Ants communicate indirectly through pheromones (stigmergy), not direct messages:

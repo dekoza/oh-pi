@@ -6,6 +6,15 @@ export {
 	getSharedStoragePath,
 	resolvePiAgentDir,
 } from "./agent-paths.js";
+export type {
+	AvailableModelRef,
+	DelegatedCategoryPolicy,
+	DelegatedCategoryRoute,
+	DelegatedFallbackGroupPolicy,
+	DelegatedRoutingPolicy,
+	DelegatedTaskClassPolicy,
+} from "./delegated-routing.js";
+export { readDelegatedRoutingPolicy, resolveDelegatedCategoryRoute, resolveModelFullId } from "./delegated-routing.js";
 export { getLocale, selectLanguage, setLocale, t } from "./i18n.js";
 export type { IconMode, IconName } from "./icons.js";
 export { icon, isPlainIcons, setPlainIcons } from "./icons.js";
