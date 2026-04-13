@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveDelegatedCategoryRoute, type AvailableModelRef } from "./delegated-routing.js";
+import { type AvailableModelRef, resolveDelegatedCategoryRoute } from "./delegated-routing.js";
 
 const availableModels: AvailableModelRef[] = [
 	{
@@ -28,13 +28,17 @@ function writeAdaptiveRoutingConfig(config: unknown): string {
 	const agentDir = mkdtempSync(join(tmpdir(), "oh-pi-core-routing-"));
 	tempDirs.push(agentDir);
 	mkdirSync(join(agentDir, "extensions", "adaptive-routing"), { recursive: true });
-	writeFileSync(join(agentDir, "extensions", "adaptive-routing", "config.json"), `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+	writeFileSync(
+		join(agentDir, "extensions", "adaptive-routing", "config.json"),
+		`${JSON.stringify(config, null, 2)}\n`,
+		"utf-8",
+	);
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	return agentDir;
 }
 
 afterEach(() => {
-	delete process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = undefined;
 	for (const dir of tempDirs.splice(0)) {
 		rmSync(dir, { recursive: true, force: true });
 	}

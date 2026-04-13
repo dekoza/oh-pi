@@ -54,91 +54,90 @@ function normalizeStringArray(value: unknown): string[] {
 	return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+	if (!value || typeof value !== "object") {
+		return undefined;
+	}
+	return value as Record<string, unknown>;
+}
+
+function normalizeOptionalString(value: unknown): string | undefined {
+	if (typeof value !== "string") {
+		return undefined;
+	}
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeCategoryPolicy(policy: unknown): DelegatedCategoryPolicy | undefined {
+	const current = asRecord(policy);
+	if (!current) {
+		return undefined;
+	}
+	return {
+		taskClass: normalizeOptionalString(current.taskClass),
+		fallbackGroup: normalizeOptionalString(current.fallbackGroup),
+		defaultThinking: normalizeOptionalString(current.defaultThinking),
+	};
+}
+
+function normalizeTaskClassPolicy(policy: unknown): DelegatedTaskClassPolicy | undefined {
+	const current = asRecord(policy);
+	if (!current) {
+		return undefined;
+	}
+	const candidates = normalizeStringArray(current.candidates);
+	if (candidates.length === 0) {
+		return undefined;
+	}
+	return {
+		candidates,
+		fallbackGroup: normalizeOptionalString(current.fallbackGroup),
+		defaultThinking: normalizeOptionalString(current.defaultThinking),
+	};
+}
+
+function normalizeFallbackGroupPolicy(policy: unknown): DelegatedFallbackGroupPolicy | undefined {
+	const current = asRecord(policy);
+	if (!current) {
+		return undefined;
+	}
+	const candidates = normalizeStringArray(current.candidates);
+	if (candidates.length === 0) {
+		return undefined;
+	}
+	return { candidates };
+}
+
+function normalizePolicyMap<T>(value: unknown, normalize: (policy: unknown) => T | undefined): Record<string, T> {
+	const record = asRecord(value);
+	if (!record) {
+		return {};
+	}
+
+	const normalized: Record<string, T> = {};
+	for (const [name, policy] of Object.entries(record)) {
+		const next = normalize(policy);
+		if (next) {
+			normalized[name] = next;
+		}
+	}
+	return normalized;
+}
+
 function normalizeDelegatedPolicy(raw: unknown): DelegatedRoutingPolicy {
-	if (!raw || typeof raw !== "object") {
+	const cfg = asRecord(raw);
+	const delegated = asRecord(cfg?.delegatedRouting);
+	if (!(cfg && delegated)) {
 		return EMPTY_POLICY;
 	}
-
-	const cfg = raw as Record<string, unknown>;
-	const delegatedRaw = cfg.delegatedRouting;
-	if (!delegatedRaw || typeof delegatedRaw !== "object") {
-		return EMPTY_POLICY;
-	}
-
-	const delegated = delegatedRaw as Record<string, unknown>;
-	const categories: Record<string, DelegatedCategoryPolicy> = {};
-	if (delegated.categories && typeof delegated.categories === "object") {
-		for (const [name, policy] of Object.entries(delegated.categories as Record<string, unknown>)) {
-			if (!policy || typeof policy !== "object") {
-				continue;
-			}
-			const current = policy as Record<string, unknown>;
-			categories[name] = {
-				taskClass:
-					typeof current.taskClass === "string" && current.taskClass.trim() ? current.taskClass.trim() : undefined,
-				fallbackGroup:
-					typeof current.fallbackGroup === "string" && current.fallbackGroup.trim()
-						? current.fallbackGroup.trim()
-						: undefined,
-				defaultThinking:
-					typeof current.defaultThinking === "string" && current.defaultThinking.trim()
-						? current.defaultThinking.trim()
-						: undefined,
-			};
-		}
-	}
-
-	const taskClasses: Record<string, DelegatedTaskClassPolicy> = {};
-	if (cfg.taskClasses && typeof cfg.taskClasses === "object") {
-		for (const [name, policy] of Object.entries(cfg.taskClasses as Record<string, unknown>)) {
-			if (!policy || typeof policy !== "object") {
-				continue;
-			}
-			const current = policy as Record<string, unknown>;
-			const candidates = normalizeStringArray(current.candidates);
-			if (candidates.length === 0) {
-				continue;
-			}
-			taskClasses[name] = {
-				candidates,
-				fallbackGroup:
-					typeof current.fallbackGroup === "string" && current.fallbackGroup.trim()
-						? current.fallbackGroup.trim()
-						: undefined,
-				defaultThinking:
-					typeof current.defaultThinking === "string" && current.defaultThinking.trim()
-						? current.defaultThinking.trim()
-						: undefined,
-			};
-		}
-	}
-
-	const fallbackGroups: Record<string, DelegatedFallbackGroupPolicy> = {};
-	if (cfg.fallbackGroups && typeof cfg.fallbackGroups === "object") {
-		for (const [name, policy] of Object.entries(cfg.fallbackGroups as Record<string, unknown>)) {
-			if (!policy || typeof policy !== "object") {
-				continue;
-			}
-			const current = policy as Record<string, unknown>;
-			const candidates = normalizeStringArray(current.candidates);
-			if (candidates.length === 0) {
-				continue;
-			}
-			fallbackGroups[name] = { candidates };
-		}
-	}
-
-	const excludedModels =
-		cfg.models && typeof cfg.models === "object"
-			? normalizeStringArray((cfg.models as Record<string, unknown>).excluded)
-			: [];
 
 	return {
 		enabled: delegated.enabled === true,
-		categories,
-		taskClasses,
-		fallbackGroups,
-		excludedModels,
+		categories: normalizePolicyMap(delegated.categories, normalizeCategoryPolicy),
+		taskClasses: normalizePolicyMap(cfg.taskClasses, normalizeTaskClassPolicy),
+		fallbackGroups: normalizePolicyMap(cfg.fallbackGroups, normalizeFallbackGroupPolicy),
+		excludedModels: normalizeStringArray(asRecord(cfg.models)?.excluded),
 	};
 }
 
@@ -159,7 +158,10 @@ function matchesModelRef(reference: string, model: AvailableModelRef): boolean {
 	return normalized === model.fullId || normalized === model.id;
 }
 
-export function resolveModelFullId(modelName: string | undefined, availableModels: AvailableModelRef[]): string | undefined {
+export function resolveModelFullId(
+	modelName: string | undefined,
+	availableModels: AvailableModelRef[],
+): string | undefined {
 	if (!modelName) {
 		return undefined;
 	}
@@ -168,8 +170,8 @@ export function resolveModelFullId(modelName: string | undefined, availableModel
 	}
 
 	const colonIdx = modelName.lastIndexOf(":");
-	const baseModel = colonIdx !== -1 ? modelName.substring(0, colonIdx) : modelName;
-	const thinkingSuffix = colonIdx !== -1 ? modelName.substring(colonIdx) : "";
+	const baseModel = colonIdx === -1 ? modelName : modelName.substring(0, colonIdx);
+	const thinkingSuffix = colonIdx === -1 ? "" : modelName.substring(colonIdx);
 	const match = availableModels.find((model) => model.id === baseModel);
 	if (!match) {
 		return modelName;
@@ -183,7 +185,10 @@ function filterAvailableCandidates(
 	excludedModels: string[],
 ): string[] {
 	return candidateRefs
-		.filter((reference) => !excludedModels.some((excluded) => excluded === reference || excluded === reference.split("/").pop()))
+		.filter(
+			(reference) =>
+				!excludedModels.some((excluded) => excluded === reference || excluded === reference.split("/").pop()),
+		)
 		.map((reference) => resolveModelFullId(reference, availableModels))
 		.filter((reference): reference is string => Boolean(reference))
 		.filter((reference) => availableModels.some((model) => matchesModelRef(reference, model)));
@@ -194,7 +199,10 @@ export function resolveDelegatedCategoryRoute(
 	availableModels: AvailableModelRef[],
 	policy = readDelegatedRoutingPolicy(),
 ): DelegatedCategoryRoute | undefined {
-	if (!policy.enabled || !category) {
+	if (!policy.enabled) {
+		return undefined;
+	}
+	if (!category) {
 		return undefined;
 	}
 
