@@ -26,6 +26,7 @@ import { preprocessMultimodalTask, shouldEscalateMultimodalRoute } from "./multi
 import { Nest } from "./nest.js";
 import { makePheromoneId, makeTaskId, resetAntCounter, runDrone, spawnAnt } from "./spawner.js";
 import { type ColonyStorageOptions, cleanupEmptyColonyStorageDirs, resolveColonyStorageOptions } from "./storage.js";
+import { resolveAntModelSelection } from "./routing.js";
 import type {
 	Ant,
 	AntCaste,
@@ -471,8 +472,15 @@ export function classifyError(errStr: string): string {
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Wave scheduler coordinates retries, budgets, and parallelism.
 async function runAntWave(opts: WaveOptions): Promise<"ok" | "budget"> {
 	const { nest, cwd, caste, signal, callbacks, currentModel, emitSignal } = opts;
-	const casteModel = opts.modelOverrides?.[caste] || currentModel;
-	const baseConfig = { ...DEFAULT_ANT_CONFIGS[caste], model: casteModel };
+	const availableModels =
+		typeof opts.modelRegistry?.getAvailable === "function"
+			? opts.modelRegistry.getAvailable().map((model) => ({
+					provider: model.provider,
+					id: model.id,
+					fullId: `${model.provider}/${model.id}`,
+				}))
+			: [];
+	const baseConfig = { ...DEFAULT_ANT_CONFIGS[caste], model: currentModel };
 
 	// Budget-aware turn cap: if the budget planner recommends fewer turns, use that
 	if (opts.budgetPlan) {
@@ -524,14 +532,17 @@ async function runAntWave(opts: WaveOptions): Promise<"ok" | "budget"> {
 			nest.recordRoutingOutcome(task.id, caste, "escalated", 0, multimodalEscalationReasons);
 		}
 
-		const shouldUseCheapMultimodalFirst = caste === "worker" && task.workerClass === "multimodal";
-		let selectedModel =
-			caste === "worker"
-				? (task.workerClass ? opts.modelOverrides?.[task.workerClass] : undefined) || casteModel
-				: casteModel;
-		if (shouldUseCheapMultimodalFirst && opts.modelOverrides?.multimodal) {
-			selectedModel = opts.modelOverrides.multimodal;
-		}
+		const route =
+			caste === "drone"
+				? { routeSource: "none" as const }
+				: resolveAntModelSelection({
+						caste,
+						workerClass: task.workerClass,
+						modelOverrides: opts.modelOverrides,
+						currentModel,
+						availableModels,
+					});
+		const selectedModel = caste === "drone" ? "none" : (route.selectedModel ?? currentModel);
 		const ant: Ant = {
 			id: "",
 			caste,
@@ -539,6 +550,7 @@ async function runAntWave(opts: WaveOptions): Promise<"ok" | "budget"> {
 			taskId: task.id,
 			pid: null,
 			model: selectedModel,
+			route,
 			usage: { input: 0, output: 0, cost: 0, turns: 0 },
 			startedAt: Date.now(),
 			finishedAt: null,
@@ -552,7 +564,7 @@ async function runAntWave(opts: WaveOptions): Promise<"ok" | "budget"> {
 			const antSignal = antAbort.signal;
 			// Bio 7: Age polymorphism — conservative early, convergent late
 			const progress = state.metrics.tasksTotal > 0 ? state.metrics.tasksDone / state.metrics.tasksTotal : 0;
-			const config = { ...baseConfig, model: selectedModel };
+			const config = { ...baseConfig, model: selectedModel, route };
 			if (progress < 0.3) {
 				config.maxTurns = Math.max(baseConfig.maxTurns - 3, 5); // Conservative early phase
 			} else if (progress > 0.7) {

@@ -216,6 +216,58 @@ describe("buildReport", () => {
 		expect(report).toContain("some error");
 	});
 
+	it("includes ant routing details when present", () => {
+		const state: ColonyState = {
+			id: "c-3",
+			goal: "Routing test",
+			status: "done",
+			tasks: [],
+			ants: [
+				{
+					id: "a-1",
+					caste: "worker",
+					status: "done",
+					taskId: "t-1",
+					pid: null,
+					model: "openai/gpt-5.4",
+					route: {
+						routeSource: "worker-class-category",
+						requestedCategory: "review-critical",
+						normalizedCategory: "review-critical",
+						selectedModel: "openai/gpt-5.4",
+						fallbackGroup: "peak-reasoning",
+						candidateModels: ["openai/gpt-5.4", "anthropic/claude-sonnet-4.6"],
+					},
+					usage: { input: 1, output: 2, cost: 0.03, turns: 3 },
+					startedAt: 0,
+					finishedAt: 1000,
+				},
+			],
+			pheromones: [],
+			concurrency: { current: 1, min: 1, max: 4, optimal: 1, history: [] },
+			metrics: {
+				tasksTotal: 0,
+				tasksDone: 0,
+				tasksFailed: 0,
+				antsSpawned: 1,
+				totalCost: 0.03,
+				totalTokens: 300,
+				startTime: 0,
+				throughputHistory: [],
+			},
+			maxCost: null,
+			modelOverrides: {},
+			createdAt: 0,
+			finishedAt: 1000,
+		};
+		const report = buildReport(state);
+		expect(report).toContain("Ant routes:");
+		expect(report).toContain("worker");
+		expect(report).toContain("openai/gpt-5.4");
+		expect(report).toContain("worker-class-category");
+		expect(report).toContain("review-critical");
+	});
+
 	it("builds plain report when OH_PI_PLAIN_ICONS is set", () => {
 		process.env.OH_PI_PLAIN_ICONS = "1";
 		const state: ColonyState = {
