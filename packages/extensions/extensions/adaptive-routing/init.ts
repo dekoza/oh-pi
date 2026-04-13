@@ -34,9 +34,11 @@ interface CategorySpec {
 }
 
 const CATEGORY_SPECS: Record<string, CategorySpec> = {
-	scout: { tiers: ["cheap", "balanced"], thinking: "minimal" },
-	worker: { tiers: ["balanced", "premium", "cheap"], thinking: "medium" },
-	soldier: { tiers: ["premium", "peak", "balanced"], thinking: "high" },
+	"quick-discovery": { tiers: ["cheap", "balanced"], thinking: "minimal" },
+	"balanced-execution": { tiers: ["balanced", "premium", "cheap"], thinking: "medium" },
+	"review-critical": { tiers: ["premium", "peak", "balanced"], thinking: "high" },
+	"visual-engineering": { tiers: ["premium", "peak"], thinking: "high" },
+	"peak-reasoning": { tiers: ["peak", "premium"], thinking: "xhigh" },
 };
 
 function selectCandidates(models: InitModelInfo[], preferredTiers: ModelTier[]): string[] {

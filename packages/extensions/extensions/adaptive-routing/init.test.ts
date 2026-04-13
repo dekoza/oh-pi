@@ -19,13 +19,15 @@ describe("generateDefaultConfig", () => {
 		expect(Object.keys(config.delegatedRouting.categories).length).toBeGreaterThan(0);
 	});
 
-	it("creates scout/worker/soldier categories with correct model tiers", () => {
+	it("creates categories matching ant-colony default names", () => {
 		const config = generateDefaultConfig(allModels);
 		const { categories } = config.delegatedRouting;
 
-		expect(categories.scout?.candidates).toBeDefined();
-		expect(categories.worker?.candidates).toBeDefined();
-		expect(categories.soldier?.candidates).toBeDefined();
+		expect(categories["quick-discovery"]).toBeDefined();
+		expect(categories["balanced-execution"]).toBeDefined();
+		expect(categories["review-critical"]).toBeDefined();
+		expect(categories["visual-engineering"]).toBeDefined();
+		expect(categories["peak-reasoning"]).toBeDefined();
 
 		for (const cat of Object.values(categories)) {
 			expect(cat.candidates!.length).toBeGreaterThan(0);
@@ -35,21 +37,23 @@ describe("generateDefaultConfig", () => {
 		}
 	});
 
-	it("assigns cheap models to scout and premium/peak models to soldier", () => {
+	it("assigns cheap models to quick-discovery and premium/peak to review-critical", () => {
 		const config = generateDefaultConfig(allModels);
 		const { categories } = config.delegatedRouting;
 
-		expect(categories.scout?.candidates).toContain("google/gemini-2.5-flash");
-		expect(categories.soldier?.candidates).toContain("openai/gpt-5.4");
+		expect(categories["quick-discovery"]?.candidates).toContain("google/gemini-2.5-flash");
+		expect(categories["review-critical"]?.candidates).toContain("openai/gpt-5.4");
 	});
 
 	it("sets appropriate thinking levels per category", () => {
 		const config = generateDefaultConfig(allModels);
 		const { categories } = config.delegatedRouting;
 
-		expect(categories.scout?.defaultThinking).toBe("minimal");
-		expect(categories.worker?.defaultThinking).toBe("medium");
-		expect(categories.soldier?.defaultThinking).toBe("high");
+		expect(categories["quick-discovery"]?.defaultThinking).toBe("minimal");
+		expect(categories["balanced-execution"]?.defaultThinking).toBe("medium");
+		expect(categories["review-critical"]?.defaultThinking).toBe("high");
+		expect(categories["visual-engineering"]?.defaultThinking).toBe("high");
+		expect(categories["peak-reasoning"]?.defaultThinking).toBe("xhigh");
 	});
 
 	it("handles a single available model", () => {
@@ -82,8 +86,10 @@ describe("generateDefaultConfig", () => {
 		const json = JSON.stringify(config, null, 2);
 
 		expect(() => JSON.parse(json)).not.toThrow();
-		expect(json).toContain('"scout"');
-		expect(json).toContain('"worker"');
-		expect(json).toContain('"soldier"');
+		expect(json).toContain('"quick-discovery"');
+		expect(json).toContain('"balanced-execution"');
+		expect(json).toContain('"review-critical"');
+		expect(json).toContain('"visual-engineering"');
+		expect(json).toContain('"peak-reasoning"');
 	});
 });

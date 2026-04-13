@@ -33,9 +33,14 @@ Built-in defaults after `/route init`:
 
 | Category | Purpose | Thinking | Typical models |
 |----------|---------|----------|----------------|
-| `scout` | Cheap exploration, broad search | `minimal` | Flash, Mini |
-| `worker` | Implementation and task execution | `medium` | Sonnet, Pro |
-| `soldier` | Review, criticism, quality checks | `high` | Opus, GPT-5.4 |
+| `quick-discovery` | Cheap exploration, broad search | `minimal` | Flash, Mini |
+| `balanced-execution` | Implementation and task execution | `medium` | Sonnet, Pro |
+| `review-critical` | Review, criticism, quality checks | `high` | Opus, GPT-5.4 |
+| `visual-engineering` | UI/visual design work | `high` | Opus, GPT-5.4 |
+| `peak-reasoning` | Architecture, autonomous planning | `xhigh` | Opus, GPT-5.4 |
+
+These names match the ant-colony caste and worker-class defaults, so colony routing works
+out of the box without extra configuration.
 
 ### Candidates
 
@@ -61,17 +66,25 @@ This is the smallest config that routes agents:
   "delegatedRouting": {
     "enabled": true,
     "categories": {
-      "scout": {
+      "quick-discovery": {
         "candidates": ["google/gemini-2.5-flash", "openai/gpt-5-mini"],
         "defaultThinking": "minimal"
       },
-      "worker": {
+      "balanced-execution": {
         "candidates": ["anthropic/claude-sonnet-4.6", "google/gemini-2.5-pro"],
         "defaultThinking": "medium"
       },
-      "soldier": {
+      "review-critical": {
         "candidates": ["openai/gpt-5.4", "anthropic/claude-opus-4.6"],
         "defaultThinking": "high"
+      },
+      "visual-engineering": {
+        "candidates": ["anthropic/claude-opus-4.6", "openai/gpt-5.4"],
+        "defaultThinking": "high"
+      },
+      "peak-reasoning": {
+        "candidates": ["openai/gpt-5.4", "anthropic/claude-opus-4.6"],
+        "defaultThinking": "xhigh"
       }
     }
   }
@@ -79,6 +92,18 @@ This is the smallest config that routes agents:
 ```
 
 Each category maps directly to an ordered model list. First available model wins.
+
+These category names align with the ant-colony defaults:
+
+| Colony role | Maps to category |
+|---|---|
+| scout caste | `quick-discovery` |
+| worker caste | `balanced-execution` |
+| soldier caste | `review-critical` |
+| design worker | `visual-engineering` |
+| backend worker | `balanced-execution` |
+| review worker | `review-critical` |
+| multimodal worker | `quick-discovery` |
 
 ### Routing modes
 
@@ -131,17 +156,25 @@ If an agent has both `model:` and `category:`, the explicit model wins and the c
   "delegatedRouting": {
     "enabled": true,
     "categories": {
-      "scout": {
+      "quick-discovery": {
         "candidates": ["google/gemini-2.5-flash", "openai/gpt-5-mini"],
         "defaultThinking": "minimal"
       },
-      "worker": {
+      "balanced-execution": {
         "candidates": ["anthropic/claude-sonnet-4.6", "google/gemini-2.5-pro", "openai/gpt-5-mini"],
         "defaultThinking": "medium"
       },
-      "soldier": {
+      "review-critical": {
         "candidates": ["openai/gpt-5.4", "anthropic/claude-opus-4.6"],
         "defaultThinking": "high"
+      },
+      "visual-engineering": {
+        "candidates": ["anthropic/claude-opus-4.6", "openai/gpt-5.4"],
+        "defaultThinking": "high"
+      },
+      "peak-reasoning": {
+        "candidates": ["openai/gpt-5.4", "anthropic/claude-opus-4.6"],
+        "defaultThinking": "xhigh"
       }
     }
   }
@@ -156,17 +189,25 @@ If an agent has both `model:` and `category:`, the explicit model wins and the c
   "delegatedRouting": {
     "enabled": true,
     "categories": {
-      "scout": {
+      "quick-discovery": {
         "candidates": ["anthropic/claude-sonnet-4.6"],
         "defaultThinking": "minimal"
       },
-      "worker": {
+      "balanced-execution": {
         "candidates": ["anthropic/claude-sonnet-4.6"],
         "defaultThinking": "medium"
       },
-      "soldier": {
+      "review-critical": {
         "candidates": ["anthropic/claude-opus-4.6", "anthropic/claude-sonnet-4.6"],
         "defaultThinking": "high"
+      },
+      "visual-engineering": {
+        "candidates": ["anthropic/claude-opus-4.6"],
+        "defaultThinking": "high"
+      },
+      "peak-reasoning": {
+        "candidates": ["anthropic/claude-opus-4.6"],
+        "defaultThinking": "xhigh"
       }
     }
   }
@@ -181,20 +222,28 @@ If an agent has both `model:` and `category:`, the explicit model wins and the c
   "delegatedRouting": {
     "enabled": true,
     "categories": {
-      "scout": {
+      "quick-discovery": {
         "candidates": ["google/gemini-2.5-flash"],
         "defaultThinking": "minimal"
       },
-      "worker": {
+      "balanced-execution": {
         "candidates": ["anthropic/claude-sonnet-4.6"],
         "defaultThinking": "medium"
       },
-      "soldier": {
+      "review-critical": {
         "candidates": ["openai/gpt-5.4"],
         "defaultThinking": "high"
       },
-      "designer": {
+      "visual-engineering": {
         "candidates": ["anthropic/claude-opus-4.6", "anthropic/claude-sonnet-4.6"],
+        "defaultThinking": "high"
+      },
+      "peak-reasoning": {
+        "candidates": ["openai/gpt-5.4"],
+        "defaultThinking": "xhigh"
+      },
+      "my-custom-design": {
+        "candidates": ["anthropic/claude-opus-4.6"],
         "defaultThinking": "high"
       }
     }
@@ -202,13 +251,13 @@ If an agent has both `model:` and `category:`, the explicit model wins and the c
 }
 ```
 
-Then create an agent with `category: designer`:
+Then create an agent with `category: my-custom-design`:
 
 ```md
 ---
 name: artist
 description: UI and visual design specialist
-category: designer
+category: my-custom-design
 ---
 
 You are a design-focused agent...
@@ -225,9 +274,11 @@ For complex setups where multiple categories should share the same pool of model
   "delegatedRouting": {
     "enabled": true,
     "categories": {
-      "scout": { "taskClass": "quick" },
-      "worker": { "fallbackGroup": "standard-coding", "defaultThinking": "medium" },
-      "soldier": { "fallbackGroup": "peak-reasoning", "defaultThinking": "high" }
+      "quick-discovery": { "taskClass": "quick" },
+      "balanced-execution": { "fallbackGroup": "standard-coding", "defaultThinking": "medium" },
+      "review-critical": { "fallbackGroup": "peak-reasoning", "defaultThinking": "high" },
+      "visual-engineering": { "fallbackGroup": "design-premium", "defaultThinking": "high" },
+      "peak-reasoning": { "taskClass": "peak", "defaultThinking": "xhigh" }
     }
   },
   "taskClasses": {
