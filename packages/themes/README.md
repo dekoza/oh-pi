@@ -36,6 +36,19 @@ The package currently ships these theme files:
 - `oh-p-dark`
 - `tokyo-night`
 
+If you do not know which one to pick, read `docs/11-theme-chooser.md` instead of choosing blind from the filenames.
+
+## Theme chooser in one table
+
+| Theme | Short take |
+| --- | --- |
+| `oh-p-dark` | balanced default dark theme |
+| `catppuccin-mocha` | soft pastel dark |
+| `cyberpunk` | neon magenta/cyan high contrast |
+| `gruvbox-dark` | warm earthy dark |
+| `nord` | cool restrained dark |
+| `tokyo-night` | blue-violet modern dark |
+
 ## How to use it
 
 Typical workflow:
