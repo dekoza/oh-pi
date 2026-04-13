@@ -1,6 +1,8 @@
 # Subagent and Colony Adaptive Routing Spec
 
 > Goal: extend oh-pi's existing adaptive-routing ideas into delegated execution (`subagent`) and ant-colony work while preserving pi's minimal, user-owned, extension-first nature.
+>
+> Implementation follow-up: `docs/plans/subagent-and-colony-adaptive-routing-implementation.md`
 
 ## 1. Problem Statement
 
