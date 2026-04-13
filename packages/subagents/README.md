@@ -87,6 +87,8 @@ Your system prompt goes here (the markdown body after frontmatter).
 
 The `thinking` field sets a default extended thinking level for the agent. At runtime it's appended as a `:level` suffix to the model string (e.g., `claude-sonnet-4-5:high`). If the model already has a thinking suffix (from a chain-clarify override), the agent's default is not double-applied.
 
+The optional `category` field is delegated-routing metadata. It does nothing by itself. It only participates in model selection when adaptive-routing config enables delegated routing and defines a matching category policy.
+
 **Extension sandboxing**
 
 Use `extensions` in frontmatter to control which extensions a subagent can access:

@@ -5,6 +5,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import type { Message } from "@mariozechner/pi-ai";
+import type { DelegatedRouteInfo } from "./delegated-routing.js";
 
 // ============================================================================
 // Basic Types
@@ -87,6 +88,7 @@ export interface SingleResult {
 	messages: Message[];
 	usage: Usage;
 	model?: string;
+	route?: DelegatedRouteInfo;
 	error?: string;
 	/** Whether the subagent was aborted via signal (vs failed naturally). */
 	aborted?: boolean;

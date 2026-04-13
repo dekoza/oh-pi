@@ -44,6 +44,12 @@ describe("adaptive routing config", () => {
 			taskClasses: {
 				quick: { defaultThinking: "bad", candidates: ["google/gemini-2.5-flash"] },
 			},
+			delegatedRouting: {
+				enabled: "yes",
+				categories: {
+					"quick-discovery": { taskClass: 7 },
+				},
+			},
 		}) as never;
 
 		expect(config.mode).toBe(DEFAULT_ADAPTIVE_ROUTING_CONFIG.mode);
@@ -55,6 +61,49 @@ describe("adaptive routing config", () => {
 		expect(config.taskClasses.quick?.defaultThinking).toBe(
 			DEFAULT_ADAPTIVE_ROUTING_CONFIG.taskClasses.quick?.defaultThinking,
 		);
+		expect(config.delegatedRouting).toEqual(DEFAULT_ADAPTIVE_ROUTING_CONFIG.delegatedRouting);
+	});
+
+	it("reads delegated routing config from the adaptive-routing config file", () => {
+		const tempAgentDir = mkdtempSync(join(tmpdir(), "adaptive-routing-config-"));
+		getAgentDir.mockReturnValue(tempAgentDir);
+		mkdirSync(join(tempAgentDir, "extensions", "adaptive-routing"), { recursive: true });
+		writeFileSync(
+			join(tempAgentDir, "extensions", "adaptive-routing", "config.json"),
+			`${JSON.stringify(
+				{
+					delegatedRouting: {
+						enabled: true,
+						categories: {
+							"quick-discovery": { taskClass: "quick" },
+							"balanced-execution": { fallbackGroup: "standard-coding", defaultThinking: "medium" },
+						},
+					},
+					fallbackGroups: {
+						"standard-coding": { candidates: ["anthropic/claude-sonnet-4.6", "openai/gpt-5-mini"] },
+					},
+				},
+				null,
+				2,
+			)}\n`,
+			"utf-8",
+		);
+
+		try {
+			const config = readAdaptiveRoutingConfig();
+			expect(config.delegatedRouting.enabled).toBe(true);
+			expect(config.delegatedRouting.categories["quick-discovery"]).toEqual({ taskClass: "quick" });
+			expect(config.delegatedRouting.categories["balanced-execution"]).toEqual({
+				fallbackGroup: "standard-coding",
+				defaultThinking: "medium",
+			});
+			expect(config.fallbackGroups["standard-coding"]?.candidates).toEqual([
+				"anthropic/claude-sonnet-4.6",
+				"openai/gpt-5-mini",
+			]);
+		} finally {
+			rmSync(tempAgentDir, { recursive: true, force: true });
+		}
 	});
 
 	it("warns and falls back when config JSON is invalid", () => {
