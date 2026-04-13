@@ -80,7 +80,7 @@ function delegatedAdaptiveRoutingConfig() {
 }
 
 afterEach(() => {
-	delete process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = undefined;
 	for (const dir of tempDirs.splice(0)) {
 		rmSync(dir, { recursive: true, force: true });
 	}
