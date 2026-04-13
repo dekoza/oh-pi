@@ -32,6 +32,18 @@ pi                    # start coding
 oh-pi installs the full bundle into pi in one command. See [Installer Options](#installer-options)
 for project-scoped installs and version pinning.
 
+## Docs Hub
+
+If you are new, do not start reading this repo randomly. Use the shortest path that matches your problem:
+
+- **I need to choose the right package** → [`docs/08-package-selection.md`](./docs/08-package-selection.md)
+- **I need to understand the docs split** → [`docs/09-docs-map.md`](./docs/09-docs-map.md)
+- **I want a guided first run** → [`docs/10-first-15-minutes.md`](./docs/10-first-15-minutes.md)
+- **I want the full package list** → [Packages](#packages)
+- **I want pi platform reference** → [`docs/00-index.md`](./docs/00-index.md)
+
+Common mistake: package READMEs document oh-pi packages, while many files under `docs/01-07` are local reference material for upstream `pi-coding-agent`. They are not the same thing.
+
 ## Packages
 
 This is a monorepo. Install everything at once with `npx @ifi/oh-pi`, or pick individual packages.
