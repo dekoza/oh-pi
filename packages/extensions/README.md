@@ -37,6 +37,35 @@ usage monitoring, adaptive model routing, scheduling features, and runtime perfo
 
 `git-guard` also blocks git bash invocations that are likely to open an interactive editor in agent environments (for example `git rebase --continue` without non-interactive editor overrides), preventing hangs before they happen.
 
+## When to install this package
+
+Install `@ifi/oh-pi-extensions` when the missing piece is smarter runtime behavior inside pi, not a new execution workflow.
+
+Use it for:
+- adaptive routing
+- reminders and recurring follow-ups
+- usage/cost visibility
+- watchdog and safe mode
+- non-interactive git safety
+- background process tracking
+
+Do **not** install this package expecting `/chain`, `/colony`, `/plan`, or `/spec`. Those come from other packages.
+
+## Fastest way to verify it loaded
+
+After install:
+
+```bash
+pi list
+pi
+```
+
+Inside pi, verify a few surfaces such as:
+- `/route status`
+- `/usage`
+- `/schedule` or `schedule_prompt`
+- `/watchdog`
+
 ## Adaptive routing
 
 Adaptive routing adds a user-friendly `/route` command set and an opt-in model-agnostic mode that can:
@@ -60,6 +89,52 @@ Key commands:
 - `/route feedback <category>`
 - `/route stats`
 
+### Adaptive routing quick start
+
+Inside pi:
+
+```text
+/route status
+/route shadow
+/route auto
+```
+
+Recommended first pass:
+1. start with `/route status`
+2. enable shadow mode first to observe routing suggestions
+3. switch to `/route auto` only after the suggestions look sane for your workload
+
+### Delegated routing for subagents and ant-colony
+
+Adaptive routing now also owns delegated category routing policy for:
+- subagent `category` metadata
+- ant-colony caste and worker-class categories
+
+That means the workflow packages can ask for a category such as `quick-discovery` or `review-critical`, while adaptive routing resolves the actual model choice.
+
+Illustrative config shape:
+
+```json
+{
+  "delegatedRouting": {
+    "enabled": true,
+    "categories": {
+      "quick-discovery": { "taskClass": "quick" },
+      "balanced-execution": { "fallbackGroup": "standard-coding" },
+      "review-critical": { "fallbackGroup": "peak-reasoning" }
+    }
+  }
+}
+```
+
+Path:
+
+```text
+~/.pi/agent/extensions/adaptive-routing/config.json
+```
+
+Explicit model overrides still win over delegated category routing.
+
 ## Scheduler follow-ups
 
 <!-- {=extensionsSchedulerOverview} -->
@@ -70,6 +145,28 @@ checks. Tasks run only while pi is active and idle, and scheduler state is persi
 storage using a workspace-mirrored path.
 
 <!-- {/extensionsSchedulerOverview} -->
+
+### Scheduler quick start
+
+Examples of the intended usage pattern:
+
+```text
+/remind 30m check the deployment
+/loop 10m watch CI until it passes
+```
+
+Tool-level example:
+
+```json
+{
+  "action": "add",
+  "kind": "once",
+  "duration": "30m",
+  "prompt": "Check whether the deployment finished"
+}
+```
+
+Use workspace scope sparingly. Most reminders should stay instance-scoped.
 
 ## Package layout
 
@@ -101,6 +198,20 @@ Use workspace scope sparingly for long-running shared checks like CI/build/deplo
 
 ## Usage tracker
 
+### Usage tracker quick start
+
+Inside pi:
+
+```text
+/usage
+/usage-refresh
+```
+
+Use this when you need:
+- current provider quota/rate-limit state
+- per-model spend visibility
+- session cost visibility including compatible background workflows such as ant-colony
+
 <!-- {=extensionsUsageTrackerOverview} -->
 
 The usage-tracker extension is a CodexBar-inspired provider quota and cost monitor for pi. It
@@ -131,6 +242,17 @@ Key usage-tracker surfaces:
 <!-- {/extensionsUsageTrackerCommandsDocs} -->
 
 ## Watchdog config
+
+### Watchdog quick start
+
+Inside pi:
+
+```text
+/watchdog
+/safe-mode
+```
+
+Use watchdog when the runtime feels unstable, laggy, or resource-starved. Use safe mode when you want pi to back off on UI churn and other expensive behavior.
 
 <!-- {=extensionsWatchdogConfigOverview} -->
 
@@ -205,3 +327,10 @@ supported range and falling back to the default interval when no valid override 
 ## Notes
 
 This package ships raw `.ts` extensions for pi to load directly.
+
+## Related packages
+
+- `@ifi/pi-extension-subagents` — delegated execution workflows that can consume adaptive delegated routing
+- `@ifi/oh-pi-ant-colony` — background swarm execution that can consume adaptive delegated routing
+- `@ifi/oh-pi` — full curated bundle
+- `docs/08-package-selection.md` — package chooser
