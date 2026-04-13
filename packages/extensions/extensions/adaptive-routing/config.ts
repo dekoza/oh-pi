@@ -323,7 +323,7 @@ function normalizeDelegatedCategoryPolicy(
 	const taskClass = normalizeOptionalString(value.taskClass, fallback?.taskClass);
 	const fallbackGroup = normalizeOptionalString(value.fallbackGroup, fallback?.fallbackGroup);
 	const defaultThinking = normalizeOptionalThinking(value.defaultThinking, fallback?.defaultThinking);
-	if (!taskClass && !fallbackGroup && !defaultThinking) {
+	if (!(taskClass || fallbackGroup || defaultThinking)) {
 		return fallback;
 	}
 	return {
