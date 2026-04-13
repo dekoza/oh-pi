@@ -12,7 +12,12 @@ This guide covers three things:
 ## Quick Start
 
 Run `/route init` inside pi. This detects your available models and generates a working config file
-at `~/.pi/agent/extensions/adaptive-routing/config.json` with default categories.
+at `~/.pi/agent/extensions/adaptive-routing/config.json`.
+
+- For generic model sets, init writes delegated routing categories.
+- When `github-copilot/*` models are present, init now writes a richer policy including `routerModels`,
+  `models.ranked`, `costs.modelMultipliers`, per-intent `maxMultiplier` ceilings, and delegated categories
+  tuned for Copilot pricing and model strengths.
 
 After init, enable routing:
 
@@ -131,6 +136,7 @@ The key config knobs are:
 - `costs.defaultMaxMultiplier` — default soft budget ceiling when an intent does not override it.
 - `intents.<intent>.preferredModels` — models that get extra score for that intent. **Order does not matter**; this is a set, not a fallback list.
 - `intents.<intent>.maxMultiplier` — per-intent soft budget ceiling.
+- `contextBreadth` — derived automatically by the classifier and used by the scorer to favor larger-window models on broad tasks.
 
 ### Multiplier-aware routing example
 
@@ -187,6 +193,7 @@ How this behaves:
 - quick questions stay on free / low-multiplier models
 - most coding work stays at `1x` or below
 - `3x` models are still allowed, but they are penalized when cheaper in-budget alternatives exist
+- large-context tasks get extra score for models with larger context windows
 - `/route explain` now shows the selected multiplier, budget ceiling, and candidate multipliers
 
 ## Attaching Categories to Agents

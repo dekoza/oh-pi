@@ -10,6 +10,26 @@ const allModels: InitModelInfo[] = [
 	{ provider: "anthropic", id: "claude-opus-4.6", name: "Claude Opus 4.6", reasoning: true, cost: { input: 3 } },
 ];
 
+const copilotModels: InitModelInfo[] = [
+	{ provider: "github-copilot", id: "gpt-5-mini", name: "GPT-5 mini", reasoning: true, cost: { input: 0 } },
+	{ provider: "github-copilot", id: "gpt-4.1", name: "GPT-4.1", reasoning: false, cost: { input: 0 } },
+	{ provider: "github-copilot", id: "gemini-3-flash-preview", name: "Gemini 3 Flash", reasoning: true, cost: { input: 0.33 } },
+	{ provider: "github-copilot", id: "claude-haiku-4.5", name: "Claude Haiku 4.5", reasoning: true, cost: { input: 0.33 } },
+	{ provider: "github-copilot", id: "gpt-4o", name: "GPT-4o", reasoning: false, cost: { input: 0 } },
+	{ provider: "github-copilot", id: "grok-code-fast-1", name: "Grok Code Fast 1", reasoning: true, cost: { input: 0.25 } },
+	{ provider: "github-copilot", id: "claude-sonnet-4.6", name: "Claude Sonnet 4.6", reasoning: true, cost: { input: 1 } },
+	{ provider: "github-copilot", id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro", reasoning: true, cost: { input: 1 } },
+	{ provider: "github-copilot", id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", reasoning: true, cost: { input: 1 } },
+	{ provider: "github-copilot", id: "gpt-5.2-codex", name: "GPT-5.2 Codex", reasoning: true, cost: { input: 1 } },
+	{ provider: "github-copilot", id: "gpt-5.3-codex", name: "GPT-5.3 Codex", reasoning: true, cost: { input: 1 } },
+	{ provider: "github-copilot", id: "gpt-5.4", name: "GPT-5.4", reasoning: true, cost: { input: 1 } },
+	{ provider: "github-copilot", id: "claude-opus-4.6", name: "Claude Opus 4.6", reasoning: true, cost: { input: 3 } },
+	{ provider: "ollama", id: "qwen3-coder:30b", name: "Qwen3 Coder 30B", reasoning: true, cost: { input: 0 } },
+	{ provider: "ollama", id: "deepseek-coder-v2:latest", name: "DeepSeek Coder V2", reasoning: true, cost: { input: 0 } },
+	{ provider: "ollama", id: "glm-4.7-flash:latest", name: "GLM 4.7 Flash", reasoning: true, cost: { input: 0 } },
+	{ provider: "ollama", id: "gemma3:12b", name: "Gemma 3 12B", reasoning: true, cost: { input: 0 } },
+];
+
 describe("generateDefaultConfig", () => {
 	it("generates a valid config with default categories from available models", () => {
 		const config = generateDefaultConfig(allModels);
@@ -102,5 +122,50 @@ describe("generateDefaultConfig", () => {
 		expect(json).toContain('"review-critical"');
 		expect(json).toContain('"visual-engineering"');
 		expect(json).toContain('"peak-reasoning"');
+	});
+
+	it("generates a rich multiplier-aware config for github-copilot model sets", () => {
+		const config = generateDefaultConfig(copilotModels);
+
+		expect(config.routerModels).toEqual([
+			"github-copilot/gpt-5-mini",
+			"github-copilot/gpt-4.1",
+			"github-copilot/gemini-3-flash-preview",
+			"github-copilot/claude-haiku-4.5",
+			"github-copilot/gpt-4o",
+		]);
+		expect(config.costs?.defaultMaxMultiplier).toBe(1);
+		expect(config.costs?.modelMultipliers["github-copilot/gpt-5-mini"]).toBe(0);
+		expect(config.costs?.modelMultipliers["github-copilot/claude-opus-4.6"]).toBe(3);
+		expect(config.models?.excluded).toEqual(
+			expect.arrayContaining(["github-copilot/raptor-mini", "github-copilot/goldeneye"]),
+		);
+		expect(config.intents?.architecture?.preferredModels?.[0]).toBe("github-copilot/gemini-3.1-pro-preview");
+		expect(config.intents?.architecture?.maxMultiplier).toBe(1);
+		expect(config.intents?.review?.preferredModels?.slice(0, 2)).toEqual([
+			"github-copilot/claude-sonnet-4.6",
+			"github-copilot/claude-opus-4.6",
+		]);
+	});
+
+	it("generates delegated categories that match the revised copilot policy", () => {
+		const config = generateDefaultConfig(copilotModels);
+		const categories = config.delegatedRouting.categories;
+
+		expect(categories["balanced-execution"]?.candidates?.slice(0, 3)).toEqual([
+			"github-copilot/claude-sonnet-4.6",
+			"github-copilot/gemini-3.1-pro-preview",
+			"github-copilot/gpt-5.2-codex",
+		]);
+		expect(categories["review-critical"]?.candidates?.slice(0, 3)).toEqual([
+			"github-copilot/claude-sonnet-4.6",
+			"github-copilot/claude-opus-4.6",
+			"github-copilot/gemini-3.1-pro-preview",
+		]);
+		expect(categories["visual-engineering"]?.candidates?.[0]).toBe("github-copilot/gemini-3.1-pro-preview");
+		expect(categories["peak-reasoning"]?.candidates?.slice(0, 2)).toEqual([
+			"github-copilot/gemini-3.1-pro-preview",
+			"github-copilot/gpt-5.4",
+		]);
 	});
 });

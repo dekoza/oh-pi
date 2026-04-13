@@ -72,8 +72,9 @@ Adaptive routing adds a user-friendly `/route` command set and an opt-in model-a
 
 - classify prompts with a cheap router model
 - choose model and thinking level before a turn starts
-- respect provider reserve thresholds, model multipliers, and fallback groups
+- respect provider reserve thresholds, model multipliers, context breadth, and fallback groups
 - drive delegated category routing for subagents and ant-colony
+- generate Copilot-aware routing policy via `/route init` when `github-copilot/*` models are available
 - suggest routes in shadow mode before automatically applying them
 - persist local-only telemetry and feedback under shared pi storage
 

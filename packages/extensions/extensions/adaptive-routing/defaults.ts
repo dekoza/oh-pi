@@ -21,6 +21,7 @@ export const ADAPTIVE_ROUTING_EXPLANATION_CODES: AdaptiveRoutingExplanationCode[
 	"cost_low_bias",
 	"cost_budget_applied",
 	"cost_over_budget",
+	"context_window_fit",
 ];
 
 export const DEFAULT_INTENT_POLICIES: Record<RouteIntent, IntentRoutingPolicy> = {

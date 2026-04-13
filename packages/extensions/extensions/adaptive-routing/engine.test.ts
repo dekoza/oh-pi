@@ -285,6 +285,83 @@ describe("adaptive routing engine", () => {
 		expect(decision.explanation.codes).toContain("cost_free_bias");
 	});
 
+	it("prefers larger-context models for large-context architecture work", () => {
+		const largeContextCandidates = normalizeRouteCandidates([
+			{
+				provider: "github-copilot",
+				id: "claude-sonnet-4.6",
+				name: "Claude Sonnet 4.6",
+				api: "anthropic-messages",
+				baseUrl: "https://api.githubcopilot.com",
+				reasoning: true,
+				input: ["text", "image"],
+				cost: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 200000,
+				maxTokens: 16384,
+			},
+			{
+				provider: "github-copilot",
+				id: "gemini-3.1-pro-preview",
+				name: "Gemini 3.1 Pro",
+				api: "google-generative-ai",
+				baseUrl: "https://api.githubcopilot.com",
+				reasoning: true,
+				input: ["text", "image"],
+				cost: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 1048576,
+				maxTokens: 65536,
+			},
+		] as never);
+		const decision = decideRoute({
+			config: {
+				...DEFAULT_ADAPTIVE_ROUTING_CONFIG,
+				models: {
+					ranked: ["github-copilot/claude-sonnet-4.6", "github-copilot/gemini-3.1-pro-preview"],
+					excluded: [],
+				},
+				costs: {
+					modelMultipliers: {
+						"github-copilot/claude-sonnet-4.6": 1,
+						"github-copilot/gemini-3.1-pro-preview": 1,
+					},
+					defaultMaxMultiplier: 1,
+				},
+				intents: {
+					...DEFAULT_ADAPTIVE_ROUTING_CONFIG.intents,
+					architecture: {
+						preferredTier: "peak",
+						defaultThinking: "xhigh",
+						preferredModels: [
+							"github-copilot/gemini-3.1-pro-preview",
+							"github-copilot/claude-sonnet-4.6",
+						],
+						maxMultiplier: 1,
+					},
+				},
+			},
+			candidates: largeContextCandidates,
+			classification: {
+				intent: "architecture",
+				complexity: 5,
+				risk: "high",
+				expectedTurns: "many",
+				toolIntensity: "high",
+				contextBreadth: "large",
+				recommendedTier: "peak",
+				recommendedThinking: "xhigh",
+				confidence: 0.9,
+				reason: "large-context architecture task",
+				classifierMode: "heuristic",
+			},
+		});
+
+		if (!decision) {
+			throw new Error("expected route decision");
+		}
+		expect(decision.selectedModel).toBe("github-copilot/gemini-3.1-pro-preview");
+		expect(decision.explanation.codes).toContain("context_window_fit");
+	});
+
 	it("evaluates the routing corpus fixtures", () => {
 		const corpus = JSON.parse(
 			readFileSync(new URL("./fixtures.route-corpus.json", import.meta.url), "utf-8"),

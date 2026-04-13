@@ -215,7 +215,8 @@ export type AdaptiveRoutingExplanationCode =
 	| "cost_free_bias"
 	| "cost_low_bias"
 	| "cost_budget_applied"
-	| "cost_over_budget";
+	| "cost_over_budget"
+	| "context_window_fit";
 
 interface TelemetryEventBase {
 	type: string;

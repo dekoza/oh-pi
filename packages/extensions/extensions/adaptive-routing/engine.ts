@@ -163,6 +163,12 @@ function scoreCandidate(candidate: NormalizedRouteCandidate, input: RoutingDecis
 		reasons.push("cheap-fit");
 	}
 
+	const contextAdjustment = scoreContextWindow(candidate.contextWindow, classification.contextBreadth);
+	score += contextAdjustment.score;
+	if (contextAdjustment.reason) {
+		reasons.push(contextAdjustment.reason);
+	}
+
 	if (typeof multiplier === "number") {
 		if (multiplier === 0) {
 			score += 12;
@@ -240,6 +246,9 @@ function buildExplanation(
 		}
 		if (reason === "cost-over-budget") {
 			codes.add("cost_over_budget");
+		}
+		if (reason === "context-fit") {
+			codes.add("context_window_fit");
 		}
 	}
 	if (topCandidates.some((candidate) => candidate.reasons.includes("cost-over-budget"))) {
@@ -327,6 +336,34 @@ function compareMultiplier(left: number | undefined, right: number | undefined):
 		return -1;
 	}
 	return left - right;
+}
+
+function scoreContextWindow(
+	contextWindow: number | undefined,
+	contextBreadth: PromptRouteClassification["contextBreadth"],
+): { score: number; reason?: string } {
+	if (!contextWindow) {
+		return { score: 0 };
+	}
+	if (contextBreadth === "large") {
+		if (contextWindow >= 500_000) {
+			return { score: 12, reason: "context-fit" };
+		}
+		if (contextWindow >= 200_000) {
+			return { score: 4, reason: "context-fit" };
+		}
+		return { score: -8 };
+	}
+	if (contextBreadth === "medium") {
+		if (contextWindow >= 200_000) {
+			return { score: 5, reason: "context-fit" };
+		}
+		if (contextWindow >= 128_000) {
+			return { score: 2 };
+		}
+		return { score: -3 };
+	}
+	return { score: 0 };
 }
 
 export function clampThinking(requested: RouteThinkingLevel, maxSupported: RouteThinkingLevel): RouteThinkingLevel {
