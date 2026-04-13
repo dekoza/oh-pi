@@ -13,6 +13,7 @@
 | 05  | [Skills/Prompts/Themes/Packages](05-skills-prompts-themes-packages.md) | Skill packs, prompt templates, theme customization, package management and distribution        |
 | 06  | [Settings/SDK/RPC/TUI](06-settings-sdk-rpc-tui.md)                     | All settings, SDK programming interface, RPC protocol, TUI component system, custom models     |
 | 07  | [CLI Reference](07-cli-reference.md)                                   | Complete CLI options, directory structure, platform support, key numbers                       |
+| 08  | [Package Selection Guide](08-package-selection.md)                     | Which oh-pi package to install for each workflow, plus common wrong-package mistakes           |
 
 ## Core Concepts Quick Reference
 
