@@ -7,11 +7,12 @@ const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptsDir, "..");
 const workflowPath = path.join(repoRoot, ".github", "workflows", "ci.yml");
 
-describe("CI workflow pull_request triggers", () => {
-	it("runs for main and stacked prep branches", () => {
+describe("CI workflow branch triggers", () => {
+	it("runs for main and stacked prep branches on push and pull_request", () => {
 		const workflow = readFileSync(workflowPath, "utf8");
 
+		expect(workflow).toContain("push:");
 		expect(workflow).toContain("pull_request:");
-		expect(workflow).toContain("branches: [main, 'prep/**']");
+		expect(workflow.match(/branches: \[main, 'prep\/\*\*'\]/g)?.length).toBe(2);
 	});
 });

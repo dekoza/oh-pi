@@ -2,4 +2,4 @@
 default: patch
 ---
 
-ci: run pull_request workflow for stacked prep branches
+ci: run push and pull_request workflows for stacked prep branches
