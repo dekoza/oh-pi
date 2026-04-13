@@ -35,6 +35,75 @@ To remove:
 npx @ifi/pi-extension-subagents --remove
 ```
 
+## Start here
+
+This README is large because the package has multiple execution modes, a manager TUI, async execution, and agent/chain file formats.
+
+If you are new, read in this order:
+
+1. **Quick start**
+2. **Agents**
+3. **Quick Commands**
+4. **Agents Manager**
+5. deeper reference sections only when needed
+
+## When to use subagents
+
+Use `@ifi/pi-extension-subagents` when you want:
+- explicit delegated execution
+- reusable named agents
+- chains and parallel steps you can still reason about
+- runtime overrides that stay visible and explainable
+
+Do **not** use it when you actually want autonomous background swarm execution. That is `@ifi/oh-pi-ant-colony`.
+
+Do **not** use it when your real need is plan/spec workflow management. That is `@ifi/pi-plan` or `@ifi/pi-spec`.
+
+## Quick start
+
+Inside pi, the fastest useful commands are:
+
+```text
+/run scout summarize this repository
+/chain scout "scan auth" -> planner "propose changes"
+/parallel scout "scan frontend" -> scout "scan backend"
+/agents
+```
+
+Suggested first-run flow:
+
+1. run `/run scout ...` once
+2. run a small `/chain ...`
+3. open `/agents`
+4. only then start editing agent files or using categories
+
+## Verification checklist
+
+After install, verify:
+- `/run` works
+- `/chain` works
+- `/parallel` works
+- `/agents` opens
+- `subagent` and `subagent_status` are available as tools
+
+## Common workflow choices
+
+### I need one delegated helper
+
+Use `/run`.
+
+### I need ordered hand-off between agents
+
+Use `/chain`.
+
+### I need multiple independent passes at once
+
+Use `/parallel`.
+
+### I want to edit agents, inspect routes, and launch from a TUI
+
+Use `/agents`.
+
 ## Agents
 
 Agents are markdown files with YAML frontmatter that define specialized subagent configurations.
@@ -146,6 +215,13 @@ The MCP adapter's metadata cache must be populated for direct tools to work. On 
 
 ## Quick Commands
 
+### Command chooser
+
+- use `/run` for one agent
+- use `/chain` for ordered hand-off
+- use `/parallel` for concurrent independent work
+- use `/agents` when you need management, inspection, or repeated launches
+
 | Command | Description |
 |---------|-------------|
 | `/run <agent> <task>` | Run a single agent with a task |
@@ -216,6 +292,8 @@ Background tasks run asynchronously and notify you when complete. Check status w
 
 ## Agents Manager
 
+The manager is the best entry point once you stop experimenting and start maintaining a real agent library.
+
 Press **Ctrl+Shift+A** or type `/agents` to open the Agents Manager overlay — a TUI for browsing, viewing, editing, creating, and launching agents and chains.
 
 **Screens:**
@@ -256,6 +334,32 @@ Press **Ctrl+Shift+A** or type `/agents` to open the Agents Manager overlay — 
 - `Esc` — back
 
 **Multi-select workflow:** Select agents with `Tab`, then press `Ctrl+R` for a sequential chain or `Ctrl+P` to open the parallel builder. The parallel builder lets you add the same agent multiple times, set per-slot task overrides, and launch N agents in parallel. Slots without a custom task use the shared task entered on the next screen.
+
+## Troubleshooting quick hits
+
+### My agent category does nothing
+
+That is expected unless adaptive delegated routing is enabled and the category exists in the adaptive-routing policy.
+
+### My category is set but the agent still uses the explicit model
+
+Also expected. Precedence is:
+1. runtime `model`
+2. explicit agent `model`
+3. delegated `category`
+4. current session fallback
+
+### The detail view shows a routing warning
+
+Read it literally. The warning means the category is currently inactive or unresolved under the available model registry/policy.
+
+### A skill is missing
+
+Execution continues, but the result summary warns about the missing skill. Fix the skill path or install the missing package instead of ignoring the warning.
+
+### MCP direct tools do not appear
+
+The adapter metadata cache is probably not populated yet. The first session may only expose the `mcp` proxy tool. Restart pi after the cache is populated.
 
 ## Chain Files
 
