@@ -28,6 +28,7 @@ If your question is "how does pi itself work?", start with the reference files b
 | 07  | [CLI Reference](07-cli-reference.md)                                   | Complete CLI options, directory structure, platform support, key numbers                       |
 | 08  | [Package Selection Guide](08-package-selection.md)                     | Which oh-pi package to install for each workflow, plus common wrong-package mistakes           |
 | 09  | [Docs Map](09-docs-map.md)                                             | Distinguish repo-specific oh-pi docs from imported pi platform reference docs                  |
+| 10  | [First 15 Minutes](10-first-15-minutes.md)                             | A beginner-first path from installation to the first working oh-pi flows                      |
 
 ## Core Concepts Quick Reference
 
