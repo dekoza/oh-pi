@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AgentConfig } from "./agents.js";
 import { applyThinkingSuffix } from "./execution.js";
+import { resolveDelegatedModelSelection, type AvailableModelRef } from "./delegated-routing.js";
 import { injectSingleOutputInstruction, resolveSingleOutputPath } from "./single-output.js";
 import {
 	isParallelStep,
@@ -50,6 +51,7 @@ export interface AsyncExecutionContext {
 	pi: ExtensionAPI;
 	cwd: string;
 	currentSessionId: string;
+	availableModels?: AvailableModelRef[];
 }
 
 export interface AsyncChainParams {
@@ -78,6 +80,7 @@ export interface AsyncSingleParams {
 	sessionRoot?: string;
 	skills?: string[];
 	output?: string | false;
+	model?: string;
 }
 
 export interface AsyncExecutionResult {
@@ -160,11 +163,14 @@ export function executeAsyncChain(id: string, params: AsyncChainParams): AsyncEx
 		const outputPath = resolveSingleOutputPath(s.output, ctx.cwd, s.cwd ?? cwd);
 		const task = injectSingleOutputInstruction(s.task ?? "{previous}", outputPath);
 
+		const route = resolveDelegatedModelSelection(a, ctx.availableModels ?? [], {
+			runtimeModel: s.model,
+		});
 		return {
 			agent: s.agent,
 			task,
 			cwd: s.cwd,
-			model: applyThinkingSuffix(s.model ?? a.model, a.thinking),
+			model: applyThinkingSuffix(route.selectedModel, a.thinking),
 			tools: a.tools,
 			extensions: a.extensions,
 			mcpDirectTools: a.mcpDirectTools,
@@ -278,7 +284,13 @@ export function executeAsyncSingle(id: string, params: AsyncSingleParams): Async
 					agent,
 					task: taskWithOutputInstruction,
 					cwd,
-					model: applyThinkingSuffix(agentConfig.model, agentConfig.thinking),
+					model: applyThinkingSuffix(
+						resolveDelegatedModelSelection(agentConfig, ctx.availableModels ?? [], {
+							runtimeModel: params.model,
+							fallbackModel: undefined,
+						}).selectedModel,
+						agentConfig.thinking,
+					),
 					tools: agentConfig.tools,
 					extensions: agentConfig.extensions,
 					mcpDirectTools: agentConfig.mcpDirectTools,

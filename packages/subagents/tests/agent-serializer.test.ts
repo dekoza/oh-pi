@@ -25,7 +25,7 @@ function createAgentFile(content: string): string {
 }
 
 describe("serializeAgent", () => {
-	it("serializes tools, mcp tools, skills, extensions, and extra fields", () => {
+	it("serializes tools, mcp tools, skills, extensions, category, and extra fields", () => {
 		const serialized = serializeAgent({
 			name: "scout",
 			description: "Fast recon",
@@ -33,6 +33,7 @@ describe("serializeAgent", () => {
 			mcpDirectTools: ["github/search_repositories"],
 			model: "claude-haiku-4-5",
 			thinking: "high",
+			category: "quick-discovery",
 			systemPrompt: "You are a scout.",
 			source: "user",
 			filePath: "/tmp/scout.md",
@@ -42,7 +43,7 @@ describe("serializeAgent", () => {
 			defaultReads: ["context.md"],
 			defaultProgress: true,
 			interactive: true,
-			extraFields: { category: "analysis" },
+			extraFields: { customField: "analysis" },
 		});
 
 		expect(serialized).toContain("name: scout");
@@ -56,7 +57,8 @@ describe("serializeAgent", () => {
 		expect(serialized).toContain("defaultReads: context.md");
 		expect(serialized).toContain("defaultProgress: true");
 		expect(serialized).toContain("interactive: true");
-		expect(serialized).toContain("category: analysis");
+		expect(serialized).toContain("category: quick-discovery");
+		expect(serialized).toContain("customField: analysis");
 		expect(serialized).toContain("You are a scout.");
 	});
 
@@ -94,6 +96,14 @@ describe("updateFrontmatterField", () => {
 		const filePath = createAgentFile("---\nname: scout\ndescription: Scout\n---\n\nPrompt\n");
 		updateFrontmatterField(filePath, "model", "claude-sonnet-4");
 		expect(fs.readFileSync(filePath, "utf-8")).toContain("model: claude-sonnet-4");
+	});
+
+	it("updates category as a first-class frontmatter field", () => {
+		const filePath = createAgentFile("---\nname: scout\ndescription: Scout\ncategory: old\n---\n\nPrompt\n");
+		updateFrontmatterField(filePath, "category", "quick-discovery");
+		const content = fs.readFileSync(filePath, "utf-8");
+		expect(content).toContain("category: quick-discovery");
+		expect(content).not.toContain("category: old");
 	});
 
 	it("removes a field when the new value is undefined", () => {

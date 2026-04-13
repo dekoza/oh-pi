@@ -49,6 +49,7 @@ const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as 
 const FIELD_ORDER = [
 	"name",
 	"description",
+	"category",
 	"model",
 	"thinking",
 	"tools",
@@ -134,6 +135,8 @@ function renderFieldValue(field: EditField, state: EditState): string {
 			return draft.name;
 		case "description":
 			return draft.description;
+		case "category":
+			return draft.category ?? "";
 		case "model":
 			return draft.model ?? "default";
 		case "thinking":
@@ -169,6 +172,9 @@ function applyFieldValue(field: EditField, state: EditState, value: string): voi
 			break;
 		case "description":
 			draft.description = value.trim();
+			break;
+		case "category":
+			draft.category = value.trim() || undefined;
 			break;
 		case "model":
 			draft.model = value.trim() || undefined;
