@@ -70,6 +70,7 @@ export interface FallbackGroupPolicy {
 }
 
 export interface DelegatedCategoryPolicy {
+	candidates?: string[];
 	taskClass?: string;
 	fallbackGroup?: string;
 	defaultThinking?: RouteThinkingLevel;

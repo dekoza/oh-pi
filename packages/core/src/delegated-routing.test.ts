@@ -88,4 +88,91 @@ describe("resolveDelegatedCategoryRoute", () => {
 
 		expect(resolveDelegatedCategoryRoute("review-critical", availableModels)).toBeUndefined();
 	});
+
+	it("resolves inline candidates directly on a category", () => {
+		writeAdaptiveRoutingConfig({
+			delegatedRouting: {
+				enabled: true,
+				categories: {
+					"quick-discovery": {
+						candidates: ["google/gemini-2.5-flash", "openai/gpt-5.4"],
+						defaultThinking: "minimal",
+					},
+				},
+			},
+		});
+
+		expect(resolveDelegatedCategoryRoute("quick-discovery", availableModels)).toEqual({
+			requestedCategory: "quick-discovery",
+			normalizedCategory: "quick-discovery",
+			selectedModel: "google/gemini-2.5-flash",
+			fallbackGroup: undefined,
+			candidateModels: ["google/gemini-2.5-flash", "openai/gpt-5.4"],
+		});
+	});
+
+	it("prefers inline candidates over taskClass candidates", () => {
+		writeAdaptiveRoutingConfig({
+			delegatedRouting: {
+				enabled: true,
+				categories: {
+					"balanced-execution": {
+						candidates: ["anthropic/claude-sonnet-4.6"],
+						taskClass: "quick",
+					},
+				},
+			},
+			taskClasses: {
+				quick: { candidates: ["google/gemini-2.5-flash"] },
+			},
+		});
+
+		const result = resolveDelegatedCategoryRoute("balanced-execution", availableModels);
+		expect(result?.selectedModel).toBe("anthropic/claude-sonnet-4.6");
+		expect(result?.candidateModels).toEqual(["anthropic/claude-sonnet-4.6"]);
+	});
+
+	it("falls through to taskClass when inline candidates are empty", () => {
+		writeAdaptiveRoutingConfig({
+			delegatedRouting: {
+				enabled: true,
+				categories: {
+					"balanced-execution": {
+						candidates: [],
+						taskClass: "quick",
+					},
+				},
+			},
+			taskClasses: {
+				quick: {
+					candidates: ["google/gemini-2.5-flash"],
+					fallbackGroup: "cheap-router",
+				},
+			},
+			fallbackGroups: {
+				"cheap-router": { candidates: ["google/gemini-2.5-flash"] },
+			},
+		});
+
+		const result = resolveDelegatedCategoryRoute("balanced-execution", availableModels);
+		expect(result?.selectedModel).toBe("google/gemini-2.5-flash");
+		expect(result?.normalizedCategory).toBe("quick");
+	});
+
+	it("works with a minimal inline-only config", () => {
+		writeAdaptiveRoutingConfig({
+			delegatedRouting: {
+				enabled: true,
+				categories: {
+					scout: { candidates: ["google/gemini-2.5-flash"] },
+					worker: { candidates: ["anthropic/claude-sonnet-4.6", "openai/gpt-5.4"] },
+					soldier: { candidates: ["openai/gpt-5.4"] },
+				},
+			},
+		});
+
+		expect(resolveDelegatedCategoryRoute("scout", availableModels)?.selectedModel).toBe("google/gemini-2.5-flash");
+		expect(resolveDelegatedCategoryRoute("worker", availableModels)?.selectedModel).toBe("anthropic/claude-sonnet-4.6");
+		expect(resolveDelegatedCategoryRoute("soldier", availableModels)?.selectedModel).toBe("openai/gpt-5.4");
+	});
 });

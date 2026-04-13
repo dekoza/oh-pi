@@ -106,6 +106,51 @@ describe("adaptive routing config", () => {
 		}
 	});
 
+	it("normalizes inline candidates on delegated categories", () => {
+		const config = normalizeAdaptiveRoutingConfig({
+			delegatedRouting: {
+				enabled: true,
+				categories: {
+					scout: {
+						candidates: ["google/gemini-2.5-flash", "openai/gpt-5-mini"],
+						defaultThinking: "minimal",
+					},
+					worker: {
+						candidates: ["anthropic/claude-sonnet-4.6"],
+						fallbackGroup: "standard-coding",
+					},
+				},
+			},
+		});
+
+		expect(config.delegatedRouting.categories.scout).toEqual({
+			candidates: ["google/gemini-2.5-flash", "openai/gpt-5-mini"],
+			defaultThinking: "minimal",
+		});
+		expect(config.delegatedRouting.categories.worker).toEqual({
+			candidates: ["anthropic/claude-sonnet-4.6"],
+			fallbackGroup: "standard-coding",
+		});
+	});
+
+	it("strips invalid entries from inline candidates array", () => {
+		const config = normalizeAdaptiveRoutingConfig({
+			delegatedRouting: {
+				enabled: true,
+				categories: {
+					scout: {
+						candidates: ["google/gemini-2.5-flash", 42, "", null, "openai/gpt-5-mini"],
+					},
+				},
+			},
+		});
+
+		expect(config.delegatedRouting.categories.scout?.candidates).toEqual([
+			"google/gemini-2.5-flash",
+			"openai/gpt-5-mini",
+		]);
+	});
+
 	it("warns and falls back when config JSON is invalid", () => {
 		const tempAgentDir = mkdtempSync(join(tmpdir(), "adaptive-routing-config-"));
 		getAgentDir.mockReturnValue(tempAgentDir);

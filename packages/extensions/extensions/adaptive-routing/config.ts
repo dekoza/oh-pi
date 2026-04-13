@@ -310,17 +310,19 @@ function normalizeDelegatedCategoryPolicy(
 	value: Record<string, unknown>,
 	fallback?: AdaptiveRoutingConfig["delegatedRouting"]["categories"][string],
 ): AdaptiveRoutingConfig["delegatedRouting"]["categories"][string] | undefined {
+	const candidates = normalizeOptionalStringArray(value.candidates, fallback?.candidates);
 	const taskClass = normalizeOptionalString(value.taskClass, fallback?.taskClass);
 	const fallbackGroup = normalizeOptionalString(value.fallbackGroup, fallback?.fallbackGroup);
 	const defaultThinking = normalizeOptionalThinking(value.defaultThinking, fallback?.defaultThinking);
-	if (!taskClass && !fallbackGroup && !defaultThinking) {
+	if (!candidates && !taskClass && !fallbackGroup && !defaultThinking) {
 		return fallback;
 	}
-	return {
-		taskClass,
-		fallbackGroup,
-		defaultThinking,
-	};
+	const result: AdaptiveRoutingConfig["delegatedRouting"]["categories"][string] = {};
+	if (candidates) result.candidates = candidates;
+	if (taskClass) result.taskClass = taskClass;
+	if (fallbackGroup) result.fallbackGroup = fallbackGroup;
+	if (defaultThinking) result.defaultThinking = defaultThinking;
+	return result;
 }
 
 function normalizeStickyTurns(value: unknown, fallback: number): number {

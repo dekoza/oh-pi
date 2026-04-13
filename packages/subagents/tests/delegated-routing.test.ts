@@ -157,6 +157,42 @@ describe("resolveDelegatedModelSelection", () => {
 		});
 	});
 
+	it("resolves inline candidates on a category without taskClass or fallbackGroup", () => {
+		const homeDir = createTempDir("subagents-routing-home-");
+		const agentDir = path.join(homeDir, ".pi", "agent");
+		process.env.HOME = homeDir;
+		process.env.USERPROFILE = homeDir;
+		process.env.PI_CODING_AGENT_DIR = agentDir;
+		writeAdaptiveRoutingConfig(agentDir, {
+			delegatedRouting: {
+				enabled: true,
+				categories: {
+					"quick-discovery": {
+						candidates: ["google/gemini-2.5-flash", "openai/gpt-5-mini"],
+						defaultThinking: "minimal",
+					},
+				},
+			},
+			models: { excluded: [] },
+		});
+
+		const decision = resolveDelegatedModelSelection(
+			{ model: undefined, category: "quick-discovery" },
+			[
+				{ provider: "google", id: "gemini-2.5-flash", fullId: "google/gemini-2.5-flash" },
+				{ provider: "openai", id: "gpt-5-mini", fullId: "openai/gpt-5-mini" },
+			],
+			{ fallbackModel: "anthropic/claude-sonnet-4.6" },
+		);
+
+		expect(decision).toMatchObject({
+			selectedModel: "google/gemini-2.5-flash",
+			routeSource: "agent-category",
+			requestedCategory: "quick-discovery",
+			candidateModels: ["google/gemini-2.5-flash", "openai/gpt-5-mini"],
+		});
+	});
+
 	it("uses explicit agent model before delegated category routing", () => {
 		const homeDir = createTempDir("subagents-routing-home-");
 		const agentDir = path.join(homeDir, ".pi", "agent");

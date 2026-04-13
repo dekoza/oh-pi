@@ -8,6 +8,7 @@ export interface AvailableModelRef {
 }
 
 export interface DelegatedCategoryPolicy {
+	candidates?: string[];
 	taskClass?: string;
 	fallbackGroup?: string;
 	defaultThinking?: string;
@@ -73,7 +74,9 @@ function normalizeDelegatedPolicy(raw: unknown): DelegatedRoutingPolicy {
 				continue;
 			}
 			const current = policy as Record<string, unknown>;
+			const inlineCandidates = normalizeStringArray(current.candidates);
 			categories[name] = {
+				candidates: inlineCandidates.length > 0 ? inlineCandidates : undefined,
 				taskClass:
 					typeof current.taskClass === "string" && current.taskClass.trim() ? current.taskClass.trim() : undefined,
 				fallbackGroup:
@@ -203,20 +206,23 @@ export function resolveDelegatedCategoryRoute(
 		return undefined;
 	}
 
+	const inlineCandidates = categoryPolicy.candidates ?? [];
 	const taskClass = categoryPolicy.taskClass ? policy.taskClasses[categoryPolicy.taskClass] : undefined;
 	const fallbackGroupName = categoryPolicy.fallbackGroup ?? taskClass?.fallbackGroup;
 	const fallbackGroup = fallbackGroupName ? policy.fallbackGroups[fallbackGroupName] : undefined;
-	const candidateRefs = taskClass?.candidates ?? fallbackGroup?.candidates ?? [];
+	const candidateRefs = inlineCandidates.length > 0 ? inlineCandidates : (taskClass?.candidates ?? fallbackGroup?.candidates ?? []);
 	const candidateModels = filterAvailableCandidates(candidateRefs, availableModels, policy.excludedModels);
 	if (candidateModels.length === 0) {
 		return undefined;
 	}
 
+	const normalizedCategory = inlineCandidates.length > 0 ? category : (categoryPolicy.taskClass ?? category);
+
 	return {
 		requestedCategory: category,
-		normalizedCategory: categoryPolicy.taskClass ?? category,
+		normalizedCategory,
 		selectedModel: candidateModels[0],
-		fallbackGroup: fallbackGroupName,
+		fallbackGroup: inlineCandidates.length > 0 ? undefined : fallbackGroupName,
 		candidateModels,
 	};
 }
