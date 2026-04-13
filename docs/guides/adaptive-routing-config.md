@@ -115,6 +115,80 @@ These category names align with the ant-colony defaults:
 
 Start with `"shadow"` to see what the router would choose. Switch to `"auto"` when you trust it.
 
+## Main-session Routing Policy
+
+Main-session routing uses a two-stage process:
+
+1. A **classifier model** analyzes the prompt and predicts intent, complexity, and recommended tier.
+2. A **deterministic scorer** ranks all available models and chooses the best acceptable one.
+
+The key config knobs are:
+
+- `routerModels` — ordered list of models allowed to classify prompts. **First available wins.**
+- `models.ranked` — global preference order for final answer models.
+- `models.excluded` — models never considered for routing.
+- `costs.modelMultipliers` — per-model billing multipliers or cost weights.
+- `costs.defaultMaxMultiplier` — default soft budget ceiling when an intent does not override it.
+- `intents.<intent>.preferredModels` — models that get extra score for that intent. **Order does not matter**; this is a set, not a fallback list.
+- `intents.<intent>.maxMultiplier` — per-intent soft budget ceiling.
+
+### Multiplier-aware routing example
+
+```json
+{
+  "routerModels": [
+    "github-copilot/gpt-5-mini",
+    "github-copilot/gpt-4.1",
+    "github-copilot/gemini-3-flash-preview"
+  ],
+  "models": {
+    "ranked": [
+      "github-copilot/claude-sonnet-4.6",
+      "github-copilot/gpt-5.2-codex",
+      "github-copilot/gpt-5-mini"
+    ],
+    "excluded": [
+      "github-copilot/raptor-mini",
+      "github-copilot/goldeneye"
+    ]
+  },
+  "costs": {
+    "modelMultipliers": {
+      "github-copilot/gpt-5-mini": 0,
+      "github-copilot/gpt-4.1": 0,
+      "github-copilot/gemini-3-flash-preview": 0.33,
+      "github-copilot/claude-sonnet-4.6": 1,
+      "github-copilot/claude-opus-4.6": 3
+    },
+    "defaultMaxMultiplier": 1
+  },
+  "intents": {
+    "quick-qna": {
+      "maxMultiplier": 0.33,
+      "preferredModels": [
+        "github-copilot/gpt-5-mini",
+        "github-copilot/gpt-4.1",
+        "github-copilot/gemini-3-flash-preview"
+      ]
+    },
+    "design": {
+      "maxMultiplier": 1,
+      "preferredModels": [
+        "github-copilot/gemini-3.1-pro-preview",
+        "github-copilot/claude-sonnet-4.6"
+      ]
+    }
+  }
+}
+```
+
+How this behaves:
+
+- quick questions stay on free / low-multiplier models
+- most coding work stays at `1x` or below
+- `3x` models are still allowed, but they are penalized when cheaper in-budget alternatives exist
+- `/route explain` now shows the selected multiplier, budget ceiling, and candidate multipliers
+
 ## Attaching Categories to Agents
 
 ### Subagent frontmatter
@@ -125,7 +199,7 @@ Add `category:` to an agent definition:
 ---
 name: scout
 description: Fast codebase recon
-category: scout
+category: quick-discovery
 ---
 
 You are a fast exploration agent...
@@ -341,8 +415,14 @@ active.
 
 ### "Wrong model gets picked"
 
-The router picks the **first available** candidate. Reorder the `candidates` array to change
-priority. Run `/route explain` after a decision to see scoring details.
+There are two different routing modes:
+
+- **Delegated routing** (`delegatedRouting.categories.*.candidates`) picks the **first available** candidate.
+- **Main-session routing** scores all available models using `models.ranked`, `intents.*`, quota, and multiplier cost policy.
+
+For delegated routing, reorder the `candidates` array.
+For main-session routing, adjust `models.ranked`, `intents.*.preferredModels`, `costs.modelMultipliers`,
+and `intents.*.maxMultiplier`, then run `/route explain`.
 
 ### "I changed the config but nothing happened"
 
@@ -359,9 +439,13 @@ Run `/route refresh` to reload the config file without restarting pi.
 | `delegatedRouting.categories.*.defaultThinking` | `ThinkingLevel` | — | Default thinking level |
 | `delegatedRouting.categories.*.taskClass` | `string` | — | Reference to a shared taskClass (advanced) |
 | `delegatedRouting.categories.*.fallbackGroup` | `string` | — | Reference to a shared fallbackGroup (advanced) |
-| `routerModels` | `string[]` | `["google/gemini-2.5-flash"]` | Models used for prompt classification |
+| `routerModels` | `string[]` | `[`"google/gemini-2.5-flash"`, `"openai/gpt-5-mini"`]` | Ordered classifier model list; first available wins |
 | `stickyTurns` | `number` | `1` | Keep the same route for N turns |
-| `models.ranked` | `string[]` | `[]` | Global model preference ranking |
+| `models.ranked` | `string[]` | `[]` | Global model preference ranking for main-session routing |
 | `models.excluded` | `string[]` | `[]` | Models to never route to |
+| `costs.modelMultipliers` | `Record<string, number>` | `{}` | Per-model multiplier / cost weight map used by the scorer |
+| `costs.defaultMaxMultiplier` | `number` | — | Default soft budget ceiling when an intent does not override it |
+| `intents.*.preferredModels` | `string[]` | — | Extra-scoring model set for that intent; order does not matter |
+| `intents.*.maxMultiplier` | `number` | — | Per-intent soft budget ceiling |
 | `telemetry.mode` | `"off" \| "local" \| "export"` | `"local"` | Telemetry storage mode |
 | `telemetry.privacy` | `"minimal" \| "redacted" \| "full-local"` | `"minimal"` | Privacy level for telemetry |
