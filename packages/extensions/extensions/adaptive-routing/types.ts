@@ -49,6 +49,7 @@ export interface IntentRoutingPolicy {
 	defaultThinking?: RouteThinkingLevel;
 	preferredTier?: RouteTier;
 	fallbackGroup?: string;
+	maxMultiplier?: number;
 }
 
 export interface TaskClassPolicy {
@@ -81,12 +82,18 @@ export interface DelegatedRoutingConfig {
 	categories: Record<string, DelegatedCategoryPolicy>;
 }
 
+export interface AdaptiveRoutingCostPolicy {
+	modelMultipliers: Record<string, number>;
+	defaultMaxMultiplier?: number;
+}
+
 export interface AdaptiveRoutingConfig {
 	mode: AdaptiveRoutingMode;
 	routerModels: string[];
 	stickyTurns: number;
 	telemetry: AdaptiveRoutingTelemetryConfig;
 	models: AdaptiveRoutingModelPreferences;
+	costs: AdaptiveRoutingCostPolicy;
 	intents: Partial<Record<RouteIntent, IntentRoutingPolicy>>;
 	taskClasses: Record<string, TaskClassPolicy>;
 	providerReserves: Partial<Record<string, ProviderReservePolicy>>;
@@ -113,6 +120,7 @@ export interface RouteCandidateScore {
 	model: string;
 	score: number;
 	reasons: string[];
+	multiplier?: number;
 }
 
 export interface RouteQuotaSnapshot {
@@ -129,6 +137,10 @@ export interface RouteExplanation {
 		applied: RouteThinkingLevel;
 	};
 	quota?: Record<string, RouteQuotaSnapshot>;
+	cost?: {
+		selectedMultiplier?: number;
+		maxMultiplier?: number;
+	};
 	candidates?: RouteCandidateScore[];
 }
 
@@ -199,7 +211,11 @@ export type AdaptiveRoutingExplanationCode =
 	| "fallback_group_applied"
 	| "manual_lock_applied"
 	| "shadow_disagreement"
-	| "classifier_fallback";
+	| "classifier_fallback"
+	| "cost_free_bias"
+	| "cost_low_bias"
+	| "cost_budget_applied"
+	| "cost_over_budget";
 
 interface TelemetryEventBase {
 	type: string;

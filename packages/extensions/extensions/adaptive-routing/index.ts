@@ -448,13 +448,19 @@ function buildExplanationLines(decision: RouteDecision | undefined, usage: Provi
 		lines.push(`Classifier: ${c.classifierMode}${c.classifierModel ? ` (${c.classifierModel})` : ""}`);
 		lines.push(`Reason: ${c.reason}`);
 	}
+	if (decision.explanation.cost) {
+		const selected = decision.explanation.cost.selectedMultiplier;
+		const max = decision.explanation.cost.maxMultiplier;
+		lines.push(`Multiplier: ${selected ?? "unknown"}${max !== undefined ? ` · budget ≤ ${max}` : ""}`);
+	}
 	if (decision.fallbacks.length > 0) {
 		lines.push(`Fallbacks: ${decision.fallbacks.join(" → ")}`);
 	}
 	if (decision.explanation.candidates?.length) {
 		lines.push("Top candidates:");
 		for (const candidate of decision.explanation.candidates) {
-			lines.push(`  - ${candidate.model} (${candidate.score.toFixed(1)}) [${candidate.reasons.join(", ")}]`);
+			const multiplier = candidate.multiplier !== undefined ? ` · x${candidate.multiplier}` : "";
+			lines.push(`  - ${candidate.model} (${candidate.score.toFixed(1)}${multiplier}) [${candidate.reasons.join(", ")}]`);
 		}
 	}
 	if (usage && Object.keys(usage.providers).length > 0) {

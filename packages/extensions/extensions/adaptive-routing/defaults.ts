@@ -17,6 +17,10 @@ export const ADAPTIVE_ROUTING_EXPLANATION_CODES: AdaptiveRoutingExplanationCode[
 	"thinking_clamped",
 	"current_model_sticky",
 	"fallback_group_applied",
+	"cost_free_bias",
+	"cost_low_bias",
+	"cost_budget_applied",
+	"cost_over_budget",
 ];
 
 export const DEFAULT_INTENT_POLICIES: Record<RouteIntent, IntentRoutingPolicy> = {
@@ -109,6 +113,9 @@ export const DEFAULT_ADAPTIVE_ROUTING_CONFIG: AdaptiveRoutingConfig = {
 	models: {
 		ranked: [],
 		excluded: [],
+	},
+	costs: {
+		modelMultipliers: {},
 	},
 	intents: DEFAULT_INTENT_POLICIES,
 	taskClasses: {

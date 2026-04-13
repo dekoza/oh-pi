@@ -70,6 +70,7 @@ function normalizeAdaptiveRoutingConfigWithWarnings(raw: unknown): NormalizedCon
 			stickyTurns: normalizeStickyTurns(cfg.stickyTurns, fallback.stickyTurns),
 			telemetry: normalizeTelemetryConfig(cfg.telemetry, fallback.telemetry, warnings),
 			models: normalizeModelPreferences(cfg.models, fallback.models, warnings),
+			costs: normalizeCostPolicy(cfg.costs, fallback.costs, warnings),
 			intents: normalizeIntentPolicies(cfg.intents, fallback.intents),
 			taskClasses: normalizeTaskClasses(cfg.taskClasses, fallback.taskClasses),
 			providerReserves: normalizeProviderReserves(cfg.providerReserves, fallback.providerReserves),
@@ -137,6 +138,27 @@ function normalizeModelPreferences(
 	};
 }
 
+function normalizeCostPolicy(
+	value: unknown,
+	fallback: AdaptiveRoutingConfig["costs"],
+	warnings?: string[],
+): AdaptiveRoutingConfig["costs"] {
+	if (!value || typeof value !== "object") {
+		if (value !== undefined) {
+			warnings?.push("Skipped invalid costs section; using fallback.");
+		}
+		return {
+			modelMultipliers: { ...fallback.modelMultipliers },
+			defaultMaxMultiplier: fallback.defaultMaxMultiplier,
+		};
+	}
+	const cfg = value as Record<string, unknown>;
+	return {
+		modelMultipliers: normalizeMultiplierMap(cfg.modelMultipliers, fallback.modelMultipliers),
+		defaultMaxMultiplier: normalizeOptionalMultiplier(cfg.defaultMaxMultiplier, fallback.defaultMaxMultiplier),
+	};
+}
+
 function normalizeIntentPolicies(
 	value: unknown,
 	fallback: AdaptiveRoutingConfig["intents"],
@@ -162,6 +184,7 @@ function normalizeIntentPolicy(value: Record<string, unknown>, fallback?: Intent
 		defaultThinking: normalizeOptionalThinking(value.defaultThinking, fallback?.defaultThinking),
 		preferredTier: normalizeOptionalTier(value.preferredTier, fallback?.preferredTier),
 		fallbackGroup: normalizeOptionalString(value.fallbackGroup, fallback?.fallbackGroup),
+		maxMultiplier: normalizeOptionalMultiplier(value.maxMultiplier, fallback?.maxMultiplier),
 	};
 }
 
@@ -339,6 +362,35 @@ function normalizePercent(value: unknown, fallback: number): number {
 		return fallback;
 	}
 	return Math.max(0, Math.min(100, parsed));
+}
+
+function normalizeOptionalMultiplier(value: unknown, fallback?: number): number | undefined {
+	if (value === undefined) {
+		return fallback;
+	}
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0) {
+		return fallback;
+	}
+	return parsed;
+}
+
+function normalizeMultiplierMap(value: unknown, fallback: Record<string, number>): Record<string, number> {
+	if (!value || typeof value !== "object") {
+		return { ...fallback };
+	}
+	const normalized: Record<string, number> = {};
+	for (const [key, rawValue] of Object.entries(value as Record<string, unknown>)) {
+		if (typeof key !== "string" || !key.trim()) {
+			continue;
+		}
+		const parsed = Number(rawValue);
+		if (!Number.isFinite(parsed) || parsed < 0) {
+			continue;
+		}
+		normalized[key.trim()] = parsed;
+	}
+	return normalized;
 }
 
 function normalizeStringArray(value: unknown, fallback: string[]): string[] {

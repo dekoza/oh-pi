@@ -51,7 +51,10 @@ export function decideRoute(input: RoutingDecisionInput): RouteDecision | undefi
 	}
 
 	const scores = candidates.map((candidate) => scoreCandidate(candidate, input));
-	scores.sort((a, b) => b.score - a.score || a.model.localeCompare(b.model));
+	scores.sort(
+		(a, b) =>
+			b.score - a.score || compareMultiplier(a.multiplier, b.multiplier) || a.model.localeCompare(b.model),
+	);
 	const best = scores[0];
 	if (!best) {
 		return undefined;
@@ -63,7 +66,7 @@ export function decideRoute(input: RoutingDecisionInput): RouteDecision | undefi
 	}
 
 	const selectedThinking = clampThinking(resolveRequestedThinking(config, classification), selected.maxThinkingLevel);
-	const explanation = buildExplanation(selected, selectedThinking, best, scores.slice(0, 3), classification, usage);
+	const explanation = buildExplanation(selected, selectedThinking, best, scores.slice(0, 3), classification, config, usage);
 
 	return {
 		selectedModel: selected.fullId,
@@ -79,6 +82,8 @@ function scoreCandidate(candidate: NormalizedRouteCandidate, input: RoutingDecis
 	let score = 0;
 	const { config, classification, currentModel, usage } = input;
 	const intentPolicy = config.intents[classification.intent];
+	const multiplier = resolveModelMultiplier(config, candidate);
+	const maxMultiplier = resolveMaxMultiplier(config, classification.intent);
 
 	const rankingIndex = config.models.ranked.findIndex((entry) => matchesModelRef(entry, candidate));
 	if (rankingIndex >= 0) {
@@ -158,10 +163,45 @@ function scoreCandidate(candidate: NormalizedRouteCandidate, input: RoutingDecis
 		reasons.push("cheap-fit");
 	}
 
+	if (typeof multiplier === "number") {
+		if (multiplier === 0) {
+			score += 12;
+			reasons.push("cost-free");
+		} else if (multiplier <= 0.33) {
+			score += 8;
+			reasons.push("cost-low");
+		} else if (multiplier <= 1) {
+			score += 3;
+			reasons.push("cost-standard");
+		} else if (multiplier <= 3) {
+			score -= 6;
+			reasons.push("cost-expensive");
+		} else {
+			score -= 35;
+			reasons.push("cost-avoid");
+		}
+
+		if (typeof maxMultiplier === "number" && multiplier > maxMultiplier) {
+			score -= 24 + Math.min(20, (multiplier - maxMultiplier) * 10);
+			reasons.push("cost-over-budget");
+		}
+
+		if (classification.recommendedTier === "cheap") {
+			if (multiplier === 0) {
+				score += 10;
+				reasons.push("cost-free-cheap-fit");
+			} else if (multiplier <= 0.33) {
+				score += 4;
+				reasons.push("cost-low-cheap-fit");
+			}
+		}
+	}
+
 	return {
 		model: candidate.fullId,
 		score,
 		reasons,
+		multiplier,
 	};
 }
 
@@ -171,6 +211,7 @@ function buildExplanation(
 	best: RouteCandidateScore,
 	topCandidates: RouteCandidateScore[],
 	classification: PromptRouteClassification,
+	config: AdaptiveRoutingConfig,
 	usage?: ProviderUsageState,
 ): RouteExplanation {
 	const requestedThinking = classification.recommendedThinking;
@@ -191,6 +232,18 @@ function buildExplanation(
 		if (reason === "quota-unknown") {
 			codes.add("quota_unknown");
 		}
+		if (reason === "cost-free") {
+			codes.add("cost_free_bias");
+		}
+		if (reason === "cost-low") {
+			codes.add("cost_low_bias");
+		}
+		if (reason === "cost-over-budget") {
+			codes.add("cost_over_budget");
+		}
+	}
+	if (topCandidates.some((candidate) => candidate.reasons.includes("cost-over-budget"))) {
+		codes.add("cost_budget_applied");
 	}
 	if (topCandidates.some((candidate) => candidate.reasons.includes("reserve-low"))) {
 		codes.add("premium_reserved");
@@ -202,13 +255,23 @@ function buildExplanation(
 		codes.add("fallback_group_applied");
 	}
 
+	const selectedMultiplier = best.multiplier;
+	const maxMultiplier = resolveMaxMultiplier(config, classification.intent);
+
 	return {
-		summary: `${selected.fullId} · ${selectedThinking} · ${classification.intent} · ${classification.recommendedTier}`,
+		summary: `${selected.fullId} · ${selectedThinking} · ${classification.intent} · ${classification.recommendedTier}${typeof selectedMultiplier === "number" ? ` · x${selectedMultiplier}` : ""}`,
 		codes: Array.from(codes),
 		classification,
 		clampedThinking:
 			selectedThinking === requestedThinking ? undefined : { requested: requestedThinking, applied: selectedThinking },
 		quota: buildQuotaSummary(usage),
+		cost:
+			typeof selectedMultiplier === "number" || typeof maxMultiplier === "number"
+				? {
+					selectedMultiplier,
+					maxMultiplier,
+				}
+				: undefined,
 		candidates: topCandidates,
 	};
 }
@@ -235,6 +298,35 @@ export function resolveRequestedThinking(
 	classification: PromptRouteClassification,
 ): RouteThinkingLevel {
 	return config.intents[classification.intent]?.defaultThinking ?? classification.recommendedThinking;
+}
+
+function resolveModelMultiplier(
+	config: AdaptiveRoutingConfig,
+	candidate: Pick<NormalizedRouteCandidate, "fullId" | "modelId">,
+): number | undefined {
+	const direct = config.costs.modelMultipliers[candidate.fullId];
+	if (typeof direct === "number") {
+		return direct;
+	}
+	const byModelId = config.costs.modelMultipliers[candidate.modelId];
+	return typeof byModelId === "number" ? byModelId : undefined;
+}
+
+function resolveMaxMultiplier(config: AdaptiveRoutingConfig, intent: RouteIntent): number | undefined {
+	return config.intents[intent]?.maxMultiplier ?? config.costs.defaultMaxMultiplier;
+}
+
+function compareMultiplier(left: number | undefined, right: number | undefined): number {
+	if (left === right) {
+		return 0;
+	}
+	if (left === undefined) {
+		return 1;
+	}
+	if (right === undefined) {
+		return -1;
+	}
+	return left - right;
 }
 
 export function clampThinking(requested: RouteThinkingLevel, maxSupported: RouteThinkingLevel): RouteThinkingLevel {

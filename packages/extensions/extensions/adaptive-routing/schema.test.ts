@@ -166,6 +166,48 @@ describe("adaptive routing config", () => {
 		}
 	});
 
+	it("normalizes model multipliers and per-intent max multipliers", () => {
+		const config = normalizeAdaptiveRoutingConfig({
+			costs: {
+				modelMultipliers: {
+					"github-copilot/gpt-5-mini": 0,
+					"github-copilot/claude-sonnet-4.6": 1,
+					"github-copilot/claude-opus-4.6": 3,
+					invalid: "nope",
+				},
+				defaultMaxMultiplier: 1,
+			},
+			intents: {
+				design: {
+					preferredModels: ["github-copilot/gemini-3.1-pro-preview"],
+					maxMultiplier: 1,
+				},
+				"quick-qna": {
+					maxMultiplier: -1,
+				},
+			},
+		});
+
+		expect(config.costs).toEqual({
+			modelMultipliers: {
+				"github-copilot/gpt-5-mini": 0,
+				"github-copilot/claude-sonnet-4.6": 1,
+				"github-copilot/claude-opus-4.6": 3,
+			},
+			defaultMaxMultiplier: 1,
+		});
+		expect(config.intents.design).toEqual({
+			preferredModels: ["github-copilot/gemini-3.1-pro-preview"],
+			preferredProviders: ["anthropic"],
+			defaultThinking: "high",
+			preferredTier: "premium",
+			fallbackGroup: "design-premium",
+			maxMultiplier: 1,
+		});
+		const quickQnaMax = config.intents["quick-qna"]?.maxMultiplier;
+		expect(quickQnaMax).toBe(DEFAULT_ADAPTIVE_ROUTING_CONFIG.intents["quick-qna"]?.maxMultiplier);
+	});
+
 	it("reads config from the shared pi agent directory", () => {
 		const tempAgentDir = mkdtempSync(join(tmpdir(), "adaptive-routing-config-"));
 		getAgentDir.mockReturnValue(tempAgentDir);
