@@ -73,6 +73,58 @@ Use:
 - `write-a-skill` when you want to productize repeated guidance into a skill
 - `grill-me` when you want your plan attacked instead of politely echoed
 
+## Cookbook
+
+### I need current docs for a library
+
+Use:
+
+```text
+/skill:context7 latest Litestar response docs
+```
+
+Choose this before generic web search when the main problem is library/API reference quality.
+
+### I need current public information, not docs
+
+Use:
+
+```text
+/skill:web-search latest pnpm catalog behavior
+```
+
+### I already know the page and just want readable content
+
+Use:
+
+```text
+/skill:web-fetch https://example.com/docs/page
+```
+
+### Something is failing and I need debugging discipline
+
+Use:
+
+```text
+/skill:debug-helper analyze this traceback and propose the shortest repro
+```
+
+### I need to bootstrap pi config for a new repo
+
+Use:
+
+```text
+/skill:quick-setup initialize pi for this project
+```
+
+### I want a reusable skill instead of repeating myself forever
+
+Use:
+
+```text
+/skill:write-a-skill create a skill for Django migration reviews
+```
+
 ## Package layout
 
 ```text

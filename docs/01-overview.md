@@ -1,5 +1,7 @@
 # Pi Coding Agent — Complete Reference
 
+> This file is pi platform reference, not package-specific oh-pi product documentation. For package choice and repo-specific guidance, start with `docs/08-package-selection.md` and `docs/09-docs-map.md`.
+
 ## 1. Project Overview
 
 - **Name**: `@mariozechner/pi-coding-agent`

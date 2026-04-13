@@ -65,6 +65,52 @@ Use:
 - `/security` when normal review is too broad and you want a security-first pass
 - `/optimize` when the issue is speed, memory, or waste
 
+## Cookbook
+
+### Review a risky change before touching it
+
+```text
+/review
+```
+
+Use this first when you are not sure whether the current code is wrong, dangerous, or just ugly.
+
+### Fix a known bug and then add tests
+
+```text
+/fix
+/test
+```
+
+Use this when the defect is already known and you want the follow-up artifact immediately.
+
+### Understand first, then document
+
+```text
+/explain auth middleware
+/document auth middleware
+```
+
+Use this when the missing piece is understanding before writing docs.
+
+### Refactor safely
+
+```text
+/refactor payment state machine
+/test payment state machine
+```
+
+Use this when structure needs work but behavior should stay stable.
+
+### Package finished work for git review
+
+```text
+/commit
+/pr
+```
+
+Use this after the code and tests are already in shape.
+
 ## Example workflow
 
 A sane review/fix loop:
