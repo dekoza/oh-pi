@@ -2,6 +2,7 @@ import type { Theme } from "@mariozechner/pi-coding-agent";
 import { matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AgentConfig } from "./agents.js";
 import { formatDuration } from "./formatters.js";
+import { explainAgentRoute, type AvailableModelLike } from "./route-explanation.js";
 import type { RunEntry } from "./run-history.js";
 import { buildSkillInjection, resolveSkills } from "./skills.js";
 import { ensureCursorVisible, getCursorDisplayPos, renderEditor, wrapText } from "./text-editor.js";
@@ -40,6 +41,7 @@ function buildDetailLines(
 	cwd: string,
 	width: number,
 	theme: Theme,
+	availableModels: AvailableModelLike[],
 ): string[] {
 	const contentWidth = width - 3;
 	const lines: string[] = [];
@@ -51,8 +53,11 @@ function buildDetailLines(
 	const reads = agent.defaultReads && agent.defaultReads.length > 0 ? agent.defaultReads.join(", ") : "(none)";
 	const progress = agent.defaultProgress ? "on" : "off";
 
+	const routeExplanation = explainAgentRoute(agent, availableModels);
+
 	lines.push(renderFieldLine("Model:", agent.model ?? "default", contentWidth, theme));
 	lines.push(renderFieldLine("Category:", agent.category ?? "(none)", contentWidth, theme));
+	lines.push(renderFieldLine("Route:", routeExplanation.effectiveRoute, contentWidth, theme));
 	lines.push(renderFieldLine("Thinking:", agent.thinking ?? "off", contentWidth, theme));
 	lines.push(renderFieldLine("Tools:", tools, contentWidth, theme));
 	lines.push(renderFieldLine("MCP:", mcp, contentWidth, theme));
@@ -63,6 +68,9 @@ function buildDetailLines(
 	lines.push(renderFieldLine("Output:", output, contentWidth, theme));
 	lines.push(renderFieldLine("Reads:", reads, contentWidth, theme));
 	lines.push(renderFieldLine("Progress:", progress, contentWidth, theme));
+	for (const warning of routeExplanation.warnings) {
+		lines.push(renderFieldLine("Warning:", warning, contentWidth, theme));
+	}
 
 	if (agent.extraFields) {
 		for (const [key, value] of Object.entries(agent.extraFields)) {
@@ -135,6 +143,7 @@ export function renderDetail(
 	cwd: string,
 	width: number,
 	theme: Theme,
+	availableModels: AvailableModelLike[] = [],
 ): string[] {
 	const lines: string[] = [];
 	const scopeBadge = agent.source === "builtin" ? "[builtin]" : agent.source === "project" ? "[proj]" : "[user]";
@@ -142,7 +151,7 @@ export function renderDetail(
 	lines.push(renderHeader(headerText, width, theme));
 	lines.push(row("", width, theme));
 
-	const contentLines = buildDetailLines(agent, state.resolved, state.recentRuns, cwd, width, theme);
+	const contentLines = buildDetailLines(agent, state.resolved, state.recentRuns, cwd, width, theme, availableModels);
 	const maxOffset = Math.max(0, contentLines.length - DETAIL_VIEWPORT_HEIGHT);
 	state.scrollOffset = Math.max(0, Math.min(state.scrollOffset, maxOffset));
 
