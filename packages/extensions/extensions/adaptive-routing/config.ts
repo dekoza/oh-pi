@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
+import { loadJsonConfigFile, type NormalizedConfigResult } from "../config-loader.js";
 import { DEFAULT_ADAPTIVE_ROUTING_CONFIG } from "./defaults.js";
 import type {
 	AdaptiveRoutingConfig,
@@ -43,49 +43,68 @@ export function getAdaptiveRoutingConfigPath(): string {
 
 export function readAdaptiveRoutingConfig(): AdaptiveRoutingConfig {
 	const configPath = getAdaptiveRoutingConfigPath();
-	if (!existsSync(configPath)) {
-		return structuredClone(DEFAULT_ADAPTIVE_ROUTING_CONFIG);
-	}
-
-	try {
-		const raw = JSON.parse(readFileSync(configPath, "utf-8")) as unknown;
-		return normalizeAdaptiveRoutingConfig(raw);
-	} catch {
-		return structuredClone(DEFAULT_ADAPTIVE_ROUTING_CONFIG);
-	}
+	return loadJsonConfigFile({
+		path: configPath,
+		fallback: DEFAULT_ADAPTIVE_ROUTING_CONFIG,
+		normalize: normalizeAdaptiveRoutingConfigWithWarnings,
+		warn: (message) => console.warn(`[adaptive-routing] ${message}`),
+	});
 }
 
 export function normalizeAdaptiveRoutingConfig(raw: unknown): AdaptiveRoutingConfig {
+	return normalizeAdaptiveRoutingConfigWithWarnings(raw).value;
+}
+
+function normalizeAdaptiveRoutingConfigWithWarnings(raw: unknown): NormalizedConfigResult<AdaptiveRoutingConfig> {
 	const fallback = structuredClone(DEFAULT_ADAPTIVE_ROUTING_CONFIG);
 	if (!raw || typeof raw !== "object") {
-		return fallback;
+		return { value: fallback };
 	}
 
 	const cfg = raw as Record<string, unknown>;
+	const warnings: string[] = [];
 	return {
-		mode: normalizeMode(cfg.mode, fallback.mode),
-		routerModels: normalizeStringArray(cfg.routerModels, fallback.routerModels),
-		stickyTurns: normalizeStickyTurns(cfg.stickyTurns, fallback.stickyTurns),
-		telemetry: normalizeTelemetryConfig(cfg.telemetry, fallback.telemetry),
-		models: normalizeModelPreferences(cfg.models, fallback.models),
-		intents: normalizeIntentPolicies(cfg.intents, fallback.intents),
-		taskClasses: normalizeTaskClasses(cfg.taskClasses, fallback.taskClasses),
-		providerReserves: normalizeProviderReserves(cfg.providerReserves, fallback.providerReserves),
-		fallbackGroups: normalizeFallbackGroups(cfg.fallbackGroups, fallback.fallbackGroups),
+		value: {
+			mode: normalizeMode(cfg.mode, fallback.mode, warnings, "mode"),
+			routerModels: normalizeStringArray(cfg.routerModels, fallback.routerModels),
+			stickyTurns: normalizeStickyTurns(cfg.stickyTurns, fallback.stickyTurns),
+			telemetry: normalizeTelemetryConfig(cfg.telemetry, fallback.telemetry, warnings),
+			models: normalizeModelPreferences(cfg.models, fallback.models, warnings),
+			costs: normalizeCostPolicy(cfg.costs, fallback.costs, warnings),
+			intents: normalizeIntentPolicies(cfg.intents, fallback.intents),
+			taskClasses: normalizeTaskClasses(cfg.taskClasses, fallback.taskClasses),
+			providerReserves: normalizeProviderReserves(cfg.providerReserves, fallback.providerReserves),
+			fallbackGroups: normalizeFallbackGroups(cfg.fallbackGroups, fallback.fallbackGroups),
+			delegatedRouting: normalizeDelegatedRouting(cfg.delegatedRouting, fallback.delegatedRouting, warnings),
+		},
+		warnings,
 	};
 }
 
-function normalizeMode(value: unknown, fallback: AdaptiveRoutingMode): AdaptiveRoutingMode {
-	return typeof value === "string" && ROUTING_MODES.has(value as AdaptiveRoutingMode)
-		? (value as AdaptiveRoutingMode)
-		: fallback;
+function normalizeMode(
+	value: unknown,
+	fallback: AdaptiveRoutingMode,
+	warnings?: string[],
+	fieldName = "mode",
+): AdaptiveRoutingMode {
+	if (typeof value === "string" && ROUTING_MODES.has(value as AdaptiveRoutingMode)) {
+		return value as AdaptiveRoutingMode;
+	}
+	if (value !== undefined) {
+		warnings?.push(`Skipped invalid ${fieldName} value; using fallback.`);
+	}
+	return fallback;
 }
 
 function normalizeTelemetryConfig(
 	value: unknown,
 	fallback: AdaptiveRoutingTelemetryConfig,
+	warnings?: string[],
 ): AdaptiveRoutingTelemetryConfig {
 	if (!value || typeof value !== "object") {
+		if (value !== undefined) {
+			warnings?.push("Skipped invalid telemetry section; using fallback.");
+		}
 		return { ...fallback };
 	}
 	const cfg = value as Record<string, unknown>;
@@ -104,14 +123,39 @@ function normalizeTelemetryConfig(
 function normalizeModelPreferences(
 	value: unknown,
 	fallback: AdaptiveRoutingModelPreferences,
+	warnings?: string[],
 ): AdaptiveRoutingModelPreferences {
 	if (!value || typeof value !== "object") {
+		if (value !== undefined) {
+			warnings?.push("Skipped invalid models section; using fallback.");
+		}
 		return { ...fallback };
 	}
 	const cfg = value as Record<string, unknown>;
 	return {
 		ranked: normalizeStringArray(cfg.ranked, fallback.ranked),
 		excluded: normalizeStringArray(cfg.excluded, fallback.excluded),
+	};
+}
+
+function normalizeCostPolicy(
+	value: unknown,
+	fallback: AdaptiveRoutingConfig["costs"],
+	warnings?: string[],
+): AdaptiveRoutingConfig["costs"] {
+	if (!value || typeof value !== "object") {
+		if (value !== undefined) {
+			warnings?.push("Skipped invalid costs section; using fallback.");
+		}
+		return {
+			modelMultipliers: { ...fallback.modelMultipliers },
+			defaultMaxMultiplier: fallback.defaultMaxMultiplier,
+		};
+	}
+	const cfg = value as Record<string, unknown>;
+	return {
+		modelMultipliers: normalizeMultiplierMap(cfg.modelMultipliers, fallback.modelMultipliers),
+		defaultMaxMultiplier: normalizeOptionalMultiplier(cfg.defaultMaxMultiplier, fallback.defaultMaxMultiplier),
 	};
 }
 
@@ -140,6 +184,7 @@ function normalizeIntentPolicy(value: Record<string, unknown>, fallback?: Intent
 		defaultThinking: normalizeOptionalThinking(value.defaultThinking, fallback?.defaultThinking),
 		preferredTier: normalizeOptionalTier(value.preferredTier, fallback?.preferredTier),
 		fallbackGroup: normalizeOptionalString(value.fallbackGroup, fallback?.fallbackGroup),
+		maxMultiplier: normalizeOptionalMultiplier(value.maxMultiplier, fallback?.maxMultiplier),
 	};
 }
 
@@ -249,6 +294,60 @@ function normalizeFallbackGroupPolicy(
 	};
 }
 
+function normalizeDelegatedRouting(
+	value: unknown,
+	fallback: AdaptiveRoutingConfig["delegatedRouting"],
+	warnings?: string[],
+): AdaptiveRoutingConfig["delegatedRouting"] {
+	if (!value || typeof value !== "object") {
+		if (value !== undefined) {
+			warnings?.push("Skipped invalid delegatedRouting section; using fallback.");
+		}
+		return {
+			enabled: fallback.enabled,
+			categories: { ...fallback.categories },
+		};
+	}
+
+	const cfg = value as Record<string, unknown>;
+	const categories: AdaptiveRoutingConfig["delegatedRouting"]["categories"] = { ...fallback.categories };
+	if (cfg.categories && typeof cfg.categories === "object") {
+		for (const [name, policy] of Object.entries(cfg.categories as Record<string, unknown>)) {
+			if (!policy || typeof policy !== "object") {
+				continue;
+			}
+			const normalized = normalizeDelegatedCategoryPolicy(policy as Record<string, unknown>, categories[name]);
+			if (normalized) {
+				categories[name] = normalized;
+			}
+		}
+	}
+
+	return {
+		enabled: typeof cfg.enabled === "boolean" ? cfg.enabled : fallback.enabled,
+		categories,
+	};
+}
+
+function normalizeDelegatedCategoryPolicy(
+	value: Record<string, unknown>,
+	fallback?: AdaptiveRoutingConfig["delegatedRouting"]["categories"][string],
+): AdaptiveRoutingConfig["delegatedRouting"]["categories"][string] | undefined {
+	const candidates = normalizeOptionalStringArray(value.candidates, fallback?.candidates);
+	const taskClass = normalizeOptionalString(value.taskClass, fallback?.taskClass);
+	const fallbackGroup = normalizeOptionalString(value.fallbackGroup, fallback?.fallbackGroup);
+	const defaultThinking = normalizeOptionalThinking(value.defaultThinking, fallback?.defaultThinking);
+	if (!candidates && !taskClass && !fallbackGroup && !defaultThinking) {
+		return fallback;
+	}
+	const result: AdaptiveRoutingConfig["delegatedRouting"]["categories"][string] = {};
+	if (candidates) result.candidates = candidates;
+	if (taskClass) result.taskClass = taskClass;
+	if (fallbackGroup) result.fallbackGroup = fallbackGroup;
+	if (defaultThinking) result.defaultThinking = defaultThinking;
+	return result;
+}
+
 function normalizeStickyTurns(value: unknown, fallback: number): number {
 	const parsed = Number(value);
 	if (!Number.isFinite(parsed)) {
@@ -263,6 +362,35 @@ function normalizePercent(value: unknown, fallback: number): number {
 		return fallback;
 	}
 	return Math.max(0, Math.min(100, parsed));
+}
+
+function normalizeOptionalMultiplier(value: unknown, fallback?: number): number | undefined {
+	if (value === undefined) {
+		return fallback;
+	}
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0) {
+		return fallback;
+	}
+	return parsed;
+}
+
+function normalizeMultiplierMap(value: unknown, fallback: Record<string, number>): Record<string, number> {
+	if (!value || typeof value !== "object") {
+		return { ...fallback };
+	}
+	const normalized: Record<string, number> = {};
+	for (const [key, rawValue] of Object.entries(value as Record<string, unknown>)) {
+		if (typeof key !== "string" || !key.trim()) {
+			continue;
+		}
+		const parsed = Number(rawValue);
+		if (!Number.isFinite(parsed) || parsed < 0) {
+			continue;
+		}
+		normalized[key.trim()] = parsed;
+	}
+	return normalized;
 }
 
 function normalizeStringArray(value: unknown, fallback: string[]): string[] {

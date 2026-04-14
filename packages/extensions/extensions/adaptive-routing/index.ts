@@ -4,9 +4,12 @@ import type {
 	ExtensionContext,
 	ModelSelectEvent,
 } from "@mariozechner/pi-coding-agent";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { classifyPrompt } from "./classifier.js";
-import { readAdaptiveRoutingConfig } from "./config.js";
+import { getAdaptiveRoutingConfigPath, readAdaptiveRoutingConfig } from "./config.js";
 import { decideRoute } from "./engine.js";
+import { generateDefaultConfig, type InitModelInfo } from "./init.js";
 import { normalizeRouteCandidates } from "./normalize.js";
 import { readAdaptiveRoutingState, writeAdaptiveRoutingState } from "./state.js";
 import {
@@ -236,7 +239,7 @@ export default function adaptiveRoutingExtension(pi: ExtensionAPI) {
 
 	pi.registerCommand("route", {
 		description:
-			"Adaptive routing controls: /route [status|on|off|shadow|auto|explain|lock|unlock|refresh|feedback|stats]",
+			"Adaptive routing controls: /route [status|on|off|shadow|auto|explain|lock|unlock|refresh|feedback|stats|init]",
 		async handler(args, ctx) {
 			const command = args.trim();
 			const [head, ...rest] = command.split(/\s+/).filter(Boolean);
@@ -314,6 +317,9 @@ export default function adaptiveRoutingExtension(pi: ExtensionAPI) {
 					return;
 				case "explain":
 					await openOverlay(ctx, buildExplanationLines(runtime.lastDecision, runtime.usage));
+					return;
+				case "init":
+					await runInit(ctx);
 					return;
 				default:
 					ctx.ui.notify(buildStatusLine(runtime.state, runtime.lastDecision, getEffectiveMode()), "info");
@@ -442,13 +448,19 @@ function buildExplanationLines(decision: RouteDecision | undefined, usage: Provi
 		lines.push(`Classifier: ${c.classifierMode}${c.classifierModel ? ` (${c.classifierModel})` : ""}`);
 		lines.push(`Reason: ${c.reason}`);
 	}
+	if (decision.explanation.cost) {
+		const selected = decision.explanation.cost.selectedMultiplier;
+		const max = decision.explanation.cost.maxMultiplier;
+		lines.push(`Multiplier: ${selected ?? "unknown"}${max !== undefined ? ` · budget ≤ ${max}` : ""}`);
+	}
 	if (decision.fallbacks.length > 0) {
 		lines.push(`Fallbacks: ${decision.fallbacks.join(" → ")}`);
 	}
 	if (decision.explanation.candidates?.length) {
 		lines.push("Top candidates:");
 		for (const candidate of decision.explanation.candidates) {
-			lines.push(`  - ${candidate.model} (${candidate.score.toFixed(1)}) [${candidate.reasons.join(", ")}]`);
+			const multiplier = candidate.multiplier !== undefined ? ` · x${candidate.multiplier}` : "";
+			lines.push(`  - ${candidate.model} (${candidate.score.toFixed(1)}${multiplier}) [${candidate.reasons.join(", ")}]`);
 		}
 	}
 	if (usage && Object.keys(usage.providers).length > 0) {
@@ -482,4 +494,63 @@ async function openOverlay(ctx: ExtensionCommandContext, lines: string[]): Promi
 		}),
 		{ overlay: true, overlayOptions: { anchor: "center", width: 96, maxHeight: 28 } },
 	);
+}
+
+async function runInit(ctx: ExtensionCommandContext): Promise<void> {
+	const configPath = getAdaptiveRoutingConfigPath();
+
+	if (existsSync(configPath)) {
+		const overwrite = await ctx.ui.confirm(
+			"Config exists",
+			`${configPath} already exists. Overwrite?`,
+		);
+		if (!overwrite) {
+			ctx.ui.notify("Init cancelled.", "info");
+			return;
+		}
+	}
+
+	const availableModels = ctx.modelRegistry.getAvailable();
+	const modelInfos: InitModelInfo[] = availableModels.map((model) => ({
+		provider: String(model.provider),
+		id: model.id,
+		name: model.name,
+		reasoning: model.reasoning,
+		cost: { input: Number(model.cost?.input ?? 0) },
+	}));
+
+	const generated = generateDefaultConfig(modelInfos);
+	const config = { ...generated };
+	const json = `${JSON.stringify(config, null, 2)}\n`;
+
+	mkdirSync(dirname(configPath), { recursive: true });
+	writeFileSync(configPath, json, "utf-8");
+
+	const categoryNames = Object.keys(config.delegatedRouting.categories);
+	const summary = categoryNames.length > 0
+		? `Created ${configPath} with categories: ${categoryNames.join(", ")}`
+		: `Created ${configPath} (no models detected — add categories manually)`;
+
+	ctx.ui.notify(summary, "info");
+
+	const lines = [
+		"Adaptive Routing — Config Generated",
+		"",
+		`File: ${configPath}`,
+		`Mode: ${config.mode}`,
+		`Delegated routing: ${config.delegatedRouting.enabled ? "enabled" : "disabled"}`,
+		"",
+	];
+	for (const [name, cat] of Object.entries(config.delegatedRouting.categories)) {
+		lines.push(`  ${name}:`);
+		lines.push(`    thinking: ${cat.defaultThinking ?? "default"}`);
+		lines.push(`    models: ${(cat.candidates ?? []).join(", ")}`);
+		lines.push("");
+	}
+	lines.push("Edit the file to customize categories and model order.");
+	lines.push("Run /route on to enable auto-routing.");
+	lines.push("");
+	lines.push("Press q, esc, space, or enter to close.");
+
+	await openOverlay(ctx, lines);
 }

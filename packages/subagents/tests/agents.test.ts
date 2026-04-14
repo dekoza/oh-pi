@@ -61,6 +61,24 @@ afterEach(() => {
 });
 
 describe("discoverAgents", () => {
+	it("loads category metadata as a first-class agent field", () => {
+		const homeDir = createTempDir("subagents-category-home-");
+		const projectDir = createTempDir("subagents-category-project-");
+		process.env.HOME = homeDir;
+		process.env.USERPROFILE = homeDir;
+
+		writeAgentFile(
+			homeDir,
+			".pi/agent/agents/scout.md",
+			"---\nname: scout\ndescription: User scout\ncategory: quick-discovery\ncustomField: keep-me\n---\n\nUser prompt\n",
+		);
+
+		const result = discoverAgents(projectDir, "both");
+		const scout = result.agents.find((agent) => agent.name === "scout");
+		expect(scout?.category).toBe("quick-discovery");
+		expect(scout?.extraFields).toEqual({ customField: "keep-me" });
+	});
+
 	it("loads bundled builtin agents from the package", () => {
 		const cwd = createTempDir("subagents-builtin-");
 		const result = discoverAgents(cwd, "both");

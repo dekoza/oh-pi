@@ -1,6 +1,7 @@
 import type {
 	AdaptiveRoutingConfig,
 	AdaptiveRoutingExplanationCode,
+	DelegatedRoutingConfig,
 	FallbackGroupPolicy,
 	IntentRoutingPolicy,
 	RouteIntent,
@@ -16,6 +17,11 @@ export const ADAPTIVE_ROUTING_EXPLANATION_CODES: AdaptiveRoutingExplanationCode[
 	"thinking_clamped",
 	"current_model_sticky",
 	"fallback_group_applied",
+	"cost_free_bias",
+	"cost_low_bias",
+	"cost_budget_applied",
+	"cost_over_budget",
+	"context_window_fit",
 ];
 
 export const DEFAULT_INTENT_POLICIES: Record<RouteIntent, IntentRoutingPolicy> = {
@@ -73,12 +79,27 @@ export const DEFAULT_FALLBACK_GROUPS: Record<string, FallbackGroupPolicy> = {
 		description: "Low-cost classifier and quick-turn routing pool.",
 	},
 	"design-premium": {
-		candidates: ["anthropic/claude-opus-4.6", "openai/gpt-5.4"],
-		description: "Premium design-focused routing pool.",
+		candidates: ["google/gemini-3.1-pro-preview", "google/gemini-2.5-pro", "anthropic/claude-opus-4.6"],
+		description: "Visual and design-focused routing pool.",
 	},
 	"peak-reasoning": {
 		candidates: ["openai/gpt-5.4", "anthropic/claude-opus-4.6", "cursor-agent/<best-available>"],
 		description: "Peak reasoning pool with premium cross-provider fallbacks.",
+	},
+	"standard-coding": {
+		candidates: ["anthropic/claude-sonnet-4.6", "openai/gpt-5-mini", "google/gemini-2.5-pro"],
+		description: "Balanced coding pool for delegated implementation work.",
+	},
+};
+
+export const DEFAULT_DELEGATED_ROUTING_CONFIG: DelegatedRoutingConfig = {
+	enabled: false,
+	categories: {
+		"quick-discovery": { taskClass: "quick" },
+		"balanced-execution": { fallbackGroup: "standard-coding", defaultThinking: "medium" },
+		"review-critical": { fallbackGroup: "peak-reasoning", defaultThinking: "high" },
+		"peak-reasoning": { taskClass: "peak", defaultThinking: "xhigh" },
+		"visual-engineering": { fallbackGroup: "design-premium", defaultThinking: "high" },
 	},
 };
 
@@ -93,6 +114,9 @@ export const DEFAULT_ADAPTIVE_ROUTING_CONFIG: AdaptiveRoutingConfig = {
 	models: {
 		ranked: [],
 		excluded: [],
+	},
+	costs: {
+		modelMultipliers: {},
 	},
 	intents: DEFAULT_INTENT_POLICIES,
 	taskClasses: {
@@ -123,4 +147,5 @@ export const DEFAULT_ADAPTIVE_ROUTING_CONFIG: AdaptiveRoutingConfig = {
 		},
 	},
 	fallbackGroups: DEFAULT_FALLBACK_GROUPS,
+	delegatedRouting: DEFAULT_DELEGATED_ROUTING_CONFIG,
 };

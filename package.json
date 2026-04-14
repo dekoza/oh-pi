@@ -1,7 +1,36 @@
 {
 	"private": true,
 	"packageManager": "pnpm@10.33.0",
+	"workspaces": ["packages/*"],
+	"pi": {
+		"extensions": [
+			"./packages/extensions/extensions/adaptive-routing.ts",
+			"./packages/extensions/extensions/auto-session-name.ts",
+			"./packages/extensions/extensions/auto-update.ts",
+			"./packages/extensions/extensions/bg-process.ts",
+			"./packages/extensions/extensions/btw.ts",
+			"./packages/extensions/extensions/compact-header.ts",
+			"./packages/extensions/extensions/custom-footer.ts",
+			"./packages/extensions/extensions/git-guard.ts",
+			"./packages/extensions/extensions/safe-guard.ts",
+			"./packages/extensions/extensions/scheduler.ts",
+			"./packages/extensions/extensions/usage-tracker.ts",
+			"./packages/extensions/extensions/watchdog.ts",
+			"./packages/ant-colony/extensions/ant-colony/index.ts",
+			"./packages/subagents/index.ts",
+			"./packages/subagents/notify.ts",
+			"./packages/plan/index.ts",
+			"./packages/spec/extension/index.ts",
+			"./packages/web-remote/index.ts",
+			"./packages/cursor/index.ts",
+			"./packages/ollama/index.ts"
+		],
+		"prompts": ["./packages/prompts/prompts"],
+		"skills": ["./packages/skills/skills"],
+		"themes": ["./packages/themes/themes"]
+	},
 	"scripts": {
+		"postinstall": "pnpm --filter @ifi/oh-pi-core --filter @ifi/pi-web-server build",
 		"build": "pnpm -r run build",
 		"build:fast": "pnpm -r run build:fast",
 		"typecheck": "pnpm --filter @ifi/oh-pi-core build && pnpm -r --filter @ifi/oh-pi-ant-colony --filter @ifi/oh-pi-core --filter @ifi/oh-pi-cli --filter @ifi/pi-spec --filter @ifi/pi-web-client --filter @ifi/pi-web-server run typecheck",
@@ -24,7 +53,8 @@
 		"lint": "biome check --error-on-warnings .",
 		"lint:fix": "biome check --fix .",
 		"format": "biome format --write .",
-		"check": "biome ci --error-on-warnings ."
+		"check": "biome ci --error-on-warnings .",
+		"pack:all": "pnpm build && node ./scripts/pack-all.mjs"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.10",

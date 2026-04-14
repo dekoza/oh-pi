@@ -2,6 +2,19 @@
 
 > Based on `@mariozechner/pi-coding-agent` v0.52.12 official documentation Last updated: 2026-02-14
 
+## Read this first
+
+This docs tree mixes two scopes:
+
+1. **repo-specific oh-pi docs** — package selection, package READMEs, oh-pi plans/design notes
+2. **imported pi reference docs** — local reference material derived from upstream `pi-coding-agent` docs
+
+If your question is "which package should I install?", start with:
+- [Package Selection Guide](08-package-selection.md)
+- [Docs Map: Repo Docs vs Imported pi Reference](09-docs-map.md)
+
+If your question is "how does pi itself work?", start with the reference files below.
+
 ## Table of Contents
 
 | #   | File                                                                   | Contents                                                                                       |
@@ -13,6 +26,10 @@
 | 05  | [Skills/Prompts/Themes/Packages](05-skills-prompts-themes-packages.md) | Skill packs, prompt templates, theme customization, package management and distribution        |
 | 06  | [Settings/SDK/RPC/TUI](06-settings-sdk-rpc-tui.md)                     | All settings, SDK programming interface, RPC protocol, TUI component system, custom models     |
 | 07  | [CLI Reference](07-cli-reference.md)                                   | Complete CLI options, directory structure, platform support, key numbers                       |
+| 08  | [Package Selection Guide](08-package-selection.md)                     | Which oh-pi package to install for each workflow, plus common wrong-package mistakes           |
+| 09  | [Docs Map](09-docs-map.md)                                             | Distinguish repo-specific oh-pi docs from imported pi platform reference docs                  |
+| 10  | [First 15 Minutes](10-first-15-minutes.md)                             | A beginner-first path from installation to the first working oh-pi flows                      |
+| 11  | [Theme Chooser](11-theme-chooser.md)                                   | A practical guide for choosing between the shipped oh-pi themes                               |
 
 ## Core Concepts Quick Reference
 

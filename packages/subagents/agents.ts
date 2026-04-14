@@ -23,6 +23,7 @@ export interface AgentConfig {
 	mcpDirectTools?: string[];
 	model?: string;
 	thinking?: string;
+	category?: string;
 	systemPrompt: string;
 	source: AgentSource;
 	filePath: string;
@@ -172,6 +173,7 @@ function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
 			mcpDirectTools: mcpDirectTools.length > 0 ? mcpDirectTools : undefined,
 			model: frontmatter.model,
 			thinking: frontmatter.thinking,
+			category: frontmatter.category,
 			systemPrompt: body,
 			source,
 			filePath,

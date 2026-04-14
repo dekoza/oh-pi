@@ -175,12 +175,26 @@ export function boltIcon(): string {
 export function buildReport(state: ColonyState): string {
 	const m = state.metrics;
 	const elapsed = state.finishedAt ? formatDuration(state.finishedAt - state.createdAt) : "?";
+	const routeLines = state.ants
+		.filter((ant) => ant.route?.selectedModel)
+		.map((ant) => {
+			const parts = [
+				`- ${casteIcon(ant.caste)} **${ant.caste}**`,
+				`${ant.route?.selectedModel}`,
+				`via ${ant.route?.routeSource}`,
+			];
+			if (ant.route?.requestedCategory) {
+				parts.push(`(${ant.route.requestedCategory})`);
+			}
+			return parts.join(" ");
+		});
 	return [
 		`## ${antIcon()} Ant Colony Report`,
 		`**Goal:** ${state.goal}`,
 		`**Status:** ${statusIcon(state.status)} ${state.status} │ ${formatCost(m.totalCost)}`,
 		`**Duration:** ${elapsed}`,
 		`**Tasks:** ${m.tasksDone}/${m.tasksTotal} done${m.tasksFailed > 0 ? `, ${m.tasksFailed} failed` : ""}`,
+		...(routeLines.length > 0 ? ["", "**Ant routes:**", ...routeLines] : []),
 		"",
 		...state.tasks.filter((t) => t.status === "done").map((t) => `- ${checkMark()} **${t.title}**`),
 		...state.tasks

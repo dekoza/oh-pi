@@ -35,6 +35,75 @@ To remove:
 npx @ifi/pi-extension-subagents --remove
 ```
 
+## Start here
+
+This README is large because the package has multiple execution modes, a manager TUI, async execution, and agent/chain file formats.
+
+If you are new, read in this order:
+
+1. **Quick start**
+2. **Agents**
+3. **Quick Commands**
+4. **Agents Manager**
+5. deeper reference sections only when needed
+
+## When to use subagents
+
+Use `@ifi/pi-extension-subagents` when you want:
+- explicit delegated execution
+- reusable named agents
+- chains and parallel steps you can still reason about
+- runtime overrides that stay visible and explainable
+
+Do **not** use it when you actually want autonomous background swarm execution. That is `@ifi/oh-pi-ant-colony`.
+
+Do **not** use it when your real need is plan/spec workflow management. That is `@ifi/pi-plan` or `@ifi/pi-spec`.
+
+## Quick start
+
+Inside pi, the fastest useful commands are:
+
+```text
+/run scout summarize this repository
+/chain scout "scan auth" -> planner "propose changes"
+/parallel scout "scan frontend" -> scout "scan backend"
+/agents
+```
+
+Suggested first-run flow:
+
+1. run `/run scout ...` once
+2. run a small `/chain ...`
+3. open `/agents`
+4. only then start editing agent files or using categories
+
+## Verification checklist
+
+After install, verify:
+- `/run` works
+- `/chain` works
+- `/parallel` works
+- `/agents` opens
+- `subagent` and `subagent_status` are available as tools
+
+## Common workflow choices
+
+### I need one delegated helper
+
+Use `/run`.
+
+### I need ordered hand-off between agents
+
+Use `/chain`.
+
+### I need multiple independent passes at once
+
+Use `/parallel`.
+
+### I want to edit agents, inspect routes, and launch from a TUI
+
+Use `/agents`.
+
 ## Agents
 
 Agents are markdown files with YAML frontmatter that define specialized subagent configurations.
@@ -73,6 +142,7 @@ description: Fast codebase recon
 tools: read, grep, find, ls, bash, mcp:chrome-devtools  # mcp: requires pi-mcp-adapter
 extensions:                 # absent=all, empty=none, csv=allowlist
 model: claude-haiku-4-5
+category: quick-discovery   # optional delegated-routing hint
 thinking: high               # off, minimal, low, medium, high, xhigh
 skill: safe-bash, chrome-devtools  # comma-separated skills to inject
 output: context.md           # writes to {chain_dir}/context.md
@@ -85,6 +155,17 @@ Your system prompt goes here (the markdown body after frontmatter).
 ```
 
 The `thinking` field sets a default extended thinking level for the agent. At runtime it's appended as a `:level` suffix to the model string (e.g., `claude-sonnet-4-5:high`). If the model already has a thinking suffix (from a chain-clarify override), the agent's default is not double-applied.
+
+The optional `category` field is delegated-routing metadata. It does nothing by itself. It only participates in model selection when adaptive-routing config enables delegated routing and defines a matching category policy.
+
+Routing precedence stays explicit:
+
+1. runtime `model` override
+2. explicit agent `model`
+3. delegated `category` routing
+4. current session model fallback
+
+Agent detail surfaces now show the effective route and warn when a category is inactive because an explicit model wins.
 
 **Extension sandboxing**
 
@@ -134,12 +215,21 @@ The MCP adapter's metadata cache must be populated for direct tools to work. On 
 
 ## Quick Commands
 
+### Command chooser
+
+- use `/run` for one agent
+- use `/chain` for ordered hand-off
+- use `/parallel` for concurrent independent work
+- use `/agents` when you need management, inspection, or repeated launches
+
 | Command | Description |
 |---------|-------------|
 | `/run <agent> <task>` | Run a single agent with a task |
 | `/chain agent1 "task1" -> agent2 "task2"` | Run agents in sequence with per-step tasks |
 | `/parallel agent1 "task1" -> agent2 "task2"` | Run agents in parallel with per-step tasks |
 | `/agents` | Open the Agents Manager overlay |
+
+The execution renderer also shows delegated route summaries when routing selected the effective model.
 
 All commands validate agent names locally and tab-complete them, then route through the tool framework for full live progress rendering. Results are sent to the conversation for the LLM to discuss.
 
@@ -202,6 +292,8 @@ Background tasks run asynchronously and notify you when complete. Check status w
 
 ## Agents Manager
 
+The manager is the best entry point once you stop experimenting and start maintaining a real agent library.
+
 Press **Ctrl+Shift+A** or type `/agents` to open the Agents Manager overlay — a TUI for browsing, viewing, editing, creating, and launching agents and chains.
 
 **Screens:**
@@ -218,7 +310,7 @@ Press **Ctrl+Shift+A** or type `/agents` to open the Agents Manager overlay — 
 
 **List screen keybindings:**
 - `↑↓` — navigate agents/chains
-- `Enter` — view detail
+- `Enter` — view detail (includes effective route + routing warnings)
 - Type any character — search/filter
 - `Tab` — toggle selection (agents only)
 - `Ctrl+N` — new agent from template
@@ -242,6 +334,32 @@ Press **Ctrl+Shift+A** or type `/agents` to open the Agents Manager overlay — 
 - `Esc` — back
 
 **Multi-select workflow:** Select agents with `Tab`, then press `Ctrl+R` for a sequential chain or `Ctrl+P` to open the parallel builder. The parallel builder lets you add the same agent multiple times, set per-slot task overrides, and launch N agents in parallel. Slots without a custom task use the shared task entered on the next screen.
+
+## Troubleshooting quick hits
+
+### My agent category does nothing
+
+That is expected unless adaptive delegated routing is enabled and the category exists in the adaptive-routing policy.
+
+### My category is set but the agent still uses the explicit model
+
+Also expected. Precedence is:
+1. runtime `model`
+2. explicit agent `model`
+3. delegated `category`
+4. current session fallback
+
+### The detail view shows a routing warning
+
+Read it literally. The warning means the category is currently inactive or unresolved under the available model registry/policy.
+
+### A skill is missing
+
+Execution continues, but the result summary warns about the missing skill. Fix the skill path or install the missing package instead of ignoring the warning.
+
+### MCP direct tools do not appear
+
+The adapter metadata cache is probably not populated yet. The first session may only expose the `mcp` proxy tool. Restart pi after the cache is populated.
 
 ## Chain Files
 
@@ -538,7 +656,7 @@ Agent definitions are not loaded into LLM context by default. Management actions
 Notes:
 - `create` uses `config.scope` (`"user"` or `"project"`), not `agentScope`.
 - `update`/`delete` use `agentScope` only for scope disambiguation when the same name exists in both scopes.
-- Agent config mapping: `reads -> defaultReads`, `progress -> defaultProgress`, `extensions` controls extension sandboxing, and `tools` supports `mcp:` entries that map to direct MCP tools.
+- Agent config mapping: `reads -> defaultReads`, `progress -> defaultProgress`, `extensions` controls extension sandboxing, `category` stores delegated-routing intent metadata, and `tools` supports `mcp:` entries that map to direct MCP tools.
 - To clear any optional field, set it to `false` or `""` (e.g., `{ model: false }` or `{ skills: "" }`). Both work for all string-typed fields.
 
 ## Parameters

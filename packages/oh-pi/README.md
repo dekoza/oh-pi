@@ -11,6 +11,8 @@ npx @ifi/oh-pi
 This registers all oh-pi packages with pi in one command. Each package is installed separately so pi
 can load extensions with proper module resolution.
 
+If you are not sure whether you want the full bundle or a narrower package, read `docs/08-package-selection.md` first. Most users should still start with `@ifi/oh-pi`.
+
 ### Options
 
 ```bash
@@ -41,5 +43,33 @@ npx @ifi/oh-pi --remove             # uninstall all oh-pi packages from pi
 
 ```bash
 npx @ifi/oh-pi
+pi list
 pi
 ```
+
+Useful first checks after install:
+
+- run `pi list` and confirm the oh-pi packages are registered
+- start `pi`
+- verify a few key surfaces exist:
+  - `/route status`
+  - `/agents`
+  - `/colony-count`
+  - `/plan`
+  - `/spec`
+
+## Who should install this
+
+Install `@ifi/oh-pi` when you want the default curated experience and do not want to assemble packages by hand.
+
+Do **not** start here only if you already know you want a narrow install such as:
+- `@ifi/oh-pi-extensions` only
+- `@ifi/pi-extension-subagents` only
+- `@ifi/oh-pi-ant-colony` only
+- `@ifi/pi-web-remote` only
+
+## Common mistakes
+
+- Installing `@ifi/pi-web-client` when you actually wanted the `/remote` command
+- Installing provider packages and expecting workflow tools like `/chain` or `/colony`
+- Installing only content packs (prompts/skills/themes/agents) and expecting runtime automation

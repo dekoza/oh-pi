@@ -61,6 +61,8 @@ function ensureGitignore(cwd: string) {
 interface AntStreamState {
 	antId: string;
 	caste: string;
+	model?: string;
+	routeSummary?: string;
 	lastLine: string;
 	tokens: number;
 }
@@ -215,6 +217,17 @@ export default function antColonyExtension(pi: ExtensionAPI) {
 	const withWorkspaceReport = (workspace: ColonyWorkspace, report: string) => {
 		const header = formatWorkspaceReport(workspace);
 		return header ? `${header}\n\n${report}` : report;
+	};
+
+	const formatAntRouteSummary = (ant: {
+		model: string;
+		route?: { routeSource: string; requestedCategory?: string };
+	}) => {
+		const parts = [ant.model, `via ${ant.route?.routeSource ?? "none"}`];
+		if (ant.route?.requestedCategory) {
+			parts.push(`(${ant.route.requestedCategory})`);
+		}
+		return parts.join(" ");
 	};
 
 	const emitAntUsageRecord = (
@@ -492,11 +505,18 @@ export default function antColonyExtension(pi: ExtensionAPI) {
 				throttledRender();
 			},
 			onAntSpawn(ant, _task) {
+				const routeSummary = formatAntRouteSummary(ant);
 				colony.antStreams.set(ant.id, {
 					antId: ant.id,
 					caste: ant.caste,
+					model: ant.model,
+					routeSummary,
 					lastLine: "starting...",
 					tokens: 0,
+				});
+				pushLog(colony, {
+					level: "info",
+					text: `${casteIcon(ant.caste)} ${ant.caste} ${routeSummary}`,
 				});
 				throttledRender();
 			},
@@ -891,9 +911,10 @@ export default function antColonyExtension(pi: ExtensionAPI) {
 								lines.push(theme.fg("muted", "  (no active streams right now)"));
 							} else {
 								for (const s of streams.slice(0, 10)) {
+									const routeLabel = s.routeSummary ? ` ${s.routeSummary}` : "";
 									const excerpt = trim((s.lastLine || "...").replace(/\s+/g, " "), Math.max(20, w - 24));
 									lines.push(
-										`  ${casteIcon(s.caste)} ${theme.fg("muted", s.antId.slice(0, 12))} ${theme.fg("muted", `${formatTokens(s.tokens)}t`)} ${theme.fg("text", excerpt)}`,
+										`  ${casteIcon(s.caste)} ${theme.fg("muted", s.antId.slice(0, 12))} ${theme.fg("muted", `${formatTokens(s.tokens)}t`)} ${theme.fg("text", trim(`${routeLabel} ${excerpt}`.trim(), Math.max(20, w - 24)))}`,
 									);
 								}
 								if (streams.length > 10) {
@@ -1188,6 +1209,13 @@ export default function antColonyExtension(pi: ExtensionAPI) {
 		}
 		if (c.workspace.note) {
 			lines.push(`Workspace note: ${trim(c.workspace.note, 100)}`);
+		}
+		const activeRoutes = Array.from(c.antStreams.values())
+			.filter((stream) => stream.routeSummary)
+			.slice(0, 3)
+			.map((stream) => `${stream.caste} ${stream.routeSummary}`);
+		if (activeRoutes.length > 0) {
+			lines.push(`Routes: ${trim(activeRoutes.join("; "), 100)}`);
 		}
 		const lastLog = c.logs[c.logs.length - 1];
 		if (lastLog) {

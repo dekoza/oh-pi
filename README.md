@@ -32,6 +32,31 @@ pi                    # start coding
 oh-pi installs the full bundle into pi in one command. See [Installer Options](#installer-options)
 for project-scoped installs and version pinning.
 
+### Fork-based Git install
+
+If you keep a personal fork with custom oh-pi changes, you can also install the repo root directly as a
+pi package:
+
+```bash
+pi install https://github.com/<you>/oh-pi@<tag-or-commit>
+```
+
+That git-install path is meant for personal fork distribution across machines. It aggregates the repo's
+shareable runtime packages directly from the clone so you do not have to mirror local workspace paths.
+Published npm installs remain the better default for stable releases.
+
+## Docs Hub
+
+If you are new, do not start reading this repo randomly. Use the shortest path that matches your problem:
+
+- **I need to choose the right package** → [`docs/08-package-selection.md`](./docs/08-package-selection.md)
+- **I need to understand the docs split** → [`docs/09-docs-map.md`](./docs/09-docs-map.md)
+- **I want a guided first run** → [`docs/10-first-15-minutes.md`](./docs/10-first-15-minutes.md)
+- **I want the full package list** → [Packages](#packages)
+- **I want pi platform reference** → [`docs/00-index.md`](./docs/00-index.md)
+
+Common mistake: package READMEs document oh-pi packages, while many files under `docs/01-07` are local reference material for upstream `pi-coding-agent`. They are not the same thing.
+
 ## Packages
 
 This is a monorepo. Install everything at once with `npx @ifi/oh-pi`, or pick individual packages.

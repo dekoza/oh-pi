@@ -13,6 +13,7 @@ import {
 import { serializeAgent } from "./agent-serializer.js";
 import { serializeChain } from "./chain-serializer.js";
 import { discoverAvailableSkills } from "./skills.js";
+import { explainAgentRoute } from "./route-explanation.js";
 import type { Details } from "./types.js";
 
 /** Maximum system prompt length when set via the management API. */
@@ -161,6 +162,13 @@ function skillsWarning(cwd: string, skills: string[] | undefined): string | unde
 	return missing.length ? `Warning: skills not found: ${missing.join(", ")}.` : undefined;
 }
 
+function routingWarnings(ctx: ManagementContext, agent: Pick<AgentConfig, "model" | "category">): string[] {
+	return explainAgentRoute(agent, ctx.modelRegistry.getAvailable()).warnings.map((warning) => {
+		const normalized = warning.charAt(0).toUpperCase() + warning.slice(1);
+		return `Warning: ${normalized}.`;
+	});
+}
+
 function parseStepList(raw: unknown): { steps?: ChainStepConfig[]; error?: string } {
 	if (!Array.isArray(raw)) return { error: "config.steps must be an array." };
 	if (raw.length === 0) return { error: "config.steps must include at least one step." };
@@ -285,6 +293,11 @@ function applyAgentConfig(target: AgentConfig, cfg: Record<string, unknown>): st
 		else if (typeof cfg.thinking === "string") target.thinking = cfg.thinking.trim() || undefined;
 		else return "config.thinking must be a string or false when provided.";
 	}
+	if (hasKey(cfg, "category")) {
+		if (cfg.category === false || cfg.category === "") target.category = undefined;
+		else if (typeof cfg.category === "string") target.category = cfg.category.trim() || undefined;
+		else return "config.category must be a string or false when provided.";
+	}
 	if (hasKey(cfg, "output")) {
 		if (cfg.output === false || cfg.output === "") target.output = undefined;
 		else if (typeof cfg.output === "string") target.output = cfg.output;
@@ -365,7 +378,7 @@ function renamePath(
 	return { filePath };
 }
 
-export function formatAgentDetail(agent: AgentConfig): string {
+export function formatAgentDetail(agent: AgentConfig, availableModels: Array<{ provider: string; id: string; fullId?: string }> = []): string {
 	const tools = [...(agent.tools ?? []), ...(agent.mcpDirectTools ?? []).map((t) => `mcp:${t}`)];
 	const lines: string[] = [
 		`Agent: ${agent.name} (${agent.source})`,
@@ -373,6 +386,12 @@ export function formatAgentDetail(agent: AgentConfig): string {
 		`Description: ${agent.description}`,
 	];
 	if (agent.model) lines.push(`Model: ${agent.model}`);
+	if (agent.category) lines.push(`Category: ${agent.category}`);
+	const routeExplanation = explainAgentRoute(agent, availableModels);
+	lines.push(`Effective Route: ${routeExplanation.effectiveRoute}`);
+	for (const warning of routeExplanation.warnings) {
+		lines.push(`Warning: ${warning}.`);
+	}
 	if (tools.length) lines.push(`Tools: ${tools.join(", ")}`);
 	if (agent.skills?.length) lines.push(`Skills: ${agent.skills.join(", ")}`);
 	if (agent.extensions !== undefined)
@@ -442,7 +461,8 @@ export function handleGet(params: ManagementParams, ctx: ManagementContext): Age
 			blocks.push(msg);
 		} else {
 			anyFound = true;
-			blocks.push(...matches.map(formatAgentDetail));
+			const availableModels = ctx.modelRegistry.getAvailable();
+			blocks.push(...matches.map((agent) => formatAgentDetail(agent, availableModels)));
 		}
 	}
 	if (params.chainName) {
@@ -517,6 +537,7 @@ export function handleCreate(params: ManagementParams, ctx: ManagementContext): 
 	if (mw) warnings.push(mw);
 	const sw = skillsWarning(ctx.cwd, agent.skills);
 	if (sw) warnings.push(sw);
+	warnings.push(...routingWarnings(ctx, agent));
 	fs.writeFileSync(targetPath, serializeAgent(agent), "utf-8");
 	return result([`Created agent '${name}' at ${targetPath}.`, ...warnings].join("\n"));
 }
@@ -562,6 +583,9 @@ export function handleUpdate(params: ManagementParams, ctx: ManagementContext): 
 		if (hasKey(cfg, "skills")) {
 			const sw = skillsWarning(ctx.cwd, updated.skills);
 			if (sw) warnings.push(sw);
+		}
+		if (hasKey(cfg, "model") || hasKey(cfg, "category")) {
+			warnings.push(...routingWarnings(ctx, updated));
 		}
 		// Filesystem mutations last
 		if (updated.name !== oldName) {

@@ -35,6 +35,17 @@ oh-pi détecte automatiquement votre environnement, vous guide dans une TUI mode
 Déjà configuré ? oh-pi détecte les fichiers existants et propose une **sauvegarde avant
 écrasement**.
 
+## Hub de documentation
+
+Si vous débutez, ne lisez pas le dépôt au hasard. Prenez le chemin le plus court selon votre besoin :
+
+- **Choisir le bon package** → [`docs/08-package-selection.md`](./docs/08-package-selection.md)
+- **Comprendre la séparation entre docs oh-pi et référence pi** → [`docs/09-docs-map.md`](./docs/09-docs-map.md)
+- **Suivre un premier parcours guidé** → [`docs/10-first-15-minutes.md`](./docs/10-first-15-minutes.md)
+- **Voir l'index général de docs** → [`docs/00-index.md`](./docs/00-index.md)
+
+Attention : les README de packages documentent surtout les packages oh-pi, alors qu'une grande partie des fichiers `docs/01-07` sert de référence locale pour `pi-coding-agent` en amont. Ce n'est pas la même chose.
+
 ## Valeur en 2 minutes
 
 pi-coding-agent est puissant par défaut, mais la configuration manuelle (fournisseurs, thèmes,

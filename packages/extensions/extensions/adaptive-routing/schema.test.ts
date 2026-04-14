@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getAgentDir } = vi.hoisted(() => ({
 	getAgentDir: vi.fn(() => "/mock-home/.pi/agent"),
@@ -16,7 +16,14 @@ import { DEFAULT_ADAPTIVE_ROUTING_CONFIG } from "./defaults.js";
 import { deriveFallbackGroups, deriveMaxThinkingLevel, normalizeRouteCandidates } from "./normalize.js";
 
 describe("adaptive routing config", () => {
+	let warnSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+	});
+
 	afterEach(() => {
+		warnSpy.mockRestore();
 		vi.clearAllMocks();
 	});
 
@@ -37,6 +44,12 @@ describe("adaptive routing config", () => {
 			taskClasses: {
 				quick: { defaultThinking: "bad", candidates: ["google/gemini-2.5-flash"] },
 			},
+			delegatedRouting: {
+				enabled: "yes",
+				categories: {
+					"quick-discovery": { taskClass: 7 },
+				},
+			},
 		}) as never;
 
 		expect(config.mode).toBe(DEFAULT_ADAPTIVE_ROUTING_CONFIG.mode);
@@ -48,6 +61,151 @@ describe("adaptive routing config", () => {
 		expect(config.taskClasses.quick?.defaultThinking).toBe(
 			DEFAULT_ADAPTIVE_ROUTING_CONFIG.taskClasses.quick?.defaultThinking,
 		);
+		expect(config.delegatedRouting).toEqual(DEFAULT_ADAPTIVE_ROUTING_CONFIG.delegatedRouting);
+	});
+
+	it("reads delegated routing config from the adaptive-routing config file", () => {
+		const tempAgentDir = mkdtempSync(join(tmpdir(), "adaptive-routing-config-"));
+		getAgentDir.mockReturnValue(tempAgentDir);
+		mkdirSync(join(tempAgentDir, "extensions", "adaptive-routing"), { recursive: true });
+		writeFileSync(
+			join(tempAgentDir, "extensions", "adaptive-routing", "config.json"),
+			`${JSON.stringify(
+				{
+					delegatedRouting: {
+						enabled: true,
+						categories: {
+							"quick-discovery": { taskClass: "quick" },
+							"balanced-execution": { fallbackGroup: "standard-coding", defaultThinking: "medium" },
+						},
+					},
+					fallbackGroups: {
+						"standard-coding": { candidates: ["anthropic/claude-sonnet-4.6", "openai/gpt-5-mini"] },
+					},
+				},
+				null,
+				2,
+			)}\n`,
+			"utf-8",
+		);
+
+		try {
+			const config = readAdaptiveRoutingConfig();
+			expect(config.delegatedRouting.enabled).toBe(true);
+			expect(config.delegatedRouting.categories["quick-discovery"]).toEqual({ taskClass: "quick" });
+			expect(config.delegatedRouting.categories["balanced-execution"]).toEqual({
+				fallbackGroup: "standard-coding",
+				defaultThinking: "medium",
+			});
+			expect(config.fallbackGroups["standard-coding"]?.candidates).toEqual([
+				"anthropic/claude-sonnet-4.6",
+				"openai/gpt-5-mini",
+			]);
+		} finally {
+			rmSync(tempAgentDir, { recursive: true, force: true });
+		}
+	});
+
+	it("normalizes inline candidates on delegated categories", () => {
+		const config = normalizeAdaptiveRoutingConfig({
+			delegatedRouting: {
+				enabled: true,
+				categories: {
+					scout: {
+						candidates: ["google/gemini-2.5-flash", "openai/gpt-5-mini"],
+						defaultThinking: "minimal",
+					},
+					worker: {
+						candidates: ["anthropic/claude-sonnet-4.6"],
+						fallbackGroup: "standard-coding",
+					},
+				},
+			},
+		});
+
+		expect(config.delegatedRouting.categories.scout).toEqual({
+			candidates: ["google/gemini-2.5-flash", "openai/gpt-5-mini"],
+			defaultThinking: "minimal",
+		});
+		expect(config.delegatedRouting.categories.worker).toEqual({
+			candidates: ["anthropic/claude-sonnet-4.6"],
+			fallbackGroup: "standard-coding",
+		});
+	});
+
+	it("strips invalid entries from inline candidates array", () => {
+		const config = normalizeAdaptiveRoutingConfig({
+			delegatedRouting: {
+				enabled: true,
+				categories: {
+					scout: {
+						candidates: ["google/gemini-2.5-flash", 42, "", null, "openai/gpt-5-mini"],
+					},
+				},
+			},
+		});
+
+		expect(config.delegatedRouting.categories.scout?.candidates).toEqual([
+			"google/gemini-2.5-flash",
+			"openai/gpt-5-mini",
+		]);
+	});
+
+	it("warns and falls back when config JSON is invalid", () => {
+		const tempAgentDir = mkdtempSync(join(tmpdir(), "adaptive-routing-config-"));
+		getAgentDir.mockReturnValue(tempAgentDir);
+		mkdirSync(join(tempAgentDir, "extensions", "adaptive-routing"), { recursive: true });
+		writeFileSync(join(tempAgentDir, "extensions", "adaptive-routing", "config.json"), "{ broken json", "utf-8");
+
+		try {
+			const config = readAdaptiveRoutingConfig();
+			expect(config).toEqual(DEFAULT_ADAPTIVE_ROUTING_CONFIG);
+			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to read config"));
+		} finally {
+			rmSync(tempAgentDir, { recursive: true, force: true });
+		}
+	});
+
+	it("normalizes model multipliers and per-intent max multipliers", () => {
+		const config = normalizeAdaptiveRoutingConfig({
+			costs: {
+				modelMultipliers: {
+					"github-copilot/gpt-5-mini": 0,
+					"github-copilot/claude-sonnet-4.6": 1,
+					"github-copilot/claude-opus-4.6": 3,
+					invalid: "nope",
+				},
+				defaultMaxMultiplier: 1,
+			},
+			intents: {
+				design: {
+					preferredModels: ["github-copilot/gemini-3.1-pro-preview"],
+					maxMultiplier: 1,
+				},
+				"quick-qna": {
+					maxMultiplier: -1,
+				},
+			},
+		});
+
+		expect(config.costs).toEqual({
+			modelMultipliers: {
+				"github-copilot/gpt-5-mini": 0,
+				"github-copilot/claude-sonnet-4.6": 1,
+				"github-copilot/claude-opus-4.6": 3,
+			},
+			defaultMaxMultiplier: 1,
+		});
+		expect(config.intents.design).toEqual({
+			preferredModels: ["github-copilot/gemini-3.1-pro-preview"],
+			preferredProviders: ["anthropic"],
+			defaultThinking: "high",
+			preferredTier: "premium",
+			fallbackGroup: "design-premium",
+			maxMultiplier: 1,
+		});
+		const quickQnaMax = config.intents["quick-qna"]?.maxMultiplier;
+		expect(quickQnaMax).toBe(DEFAULT_ADAPTIVE_ROUTING_CONFIG.intents["quick-qna"]?.maxMultiplier);
 	});
 
 	it("reads config from the shared pi agent directory", () => {
