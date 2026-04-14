@@ -24,9 +24,9 @@ import { adapt, defaultConcurrency, sampleSystem } from "./concurrency.js";
 import { buildImportGraph, type ImportGraph, taskDependsOn } from "./deps.js";
 import { preprocessMultimodalTask, shouldEscalateMultimodalRoute } from "./multimodal-routing.js";
 import { Nest } from "./nest.js";
+import { resolveAntModelSelection } from "./routing.js";
 import { makePheromoneId, makeTaskId, resetAntCounter, runDrone, spawnAnt } from "./spawner.js";
 import { type ColonyStorageOptions, cleanupEmptyColonyStorageDirs, resolveColonyStorageOptions } from "./storage.js";
-import { resolveAntModelSelection } from "./routing.js";
 import type {
 	Ant,
 	AntCaste,

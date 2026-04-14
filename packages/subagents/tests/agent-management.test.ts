@@ -2,8 +2,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { discoverAgents } from "../agents.js";
 import { formatAgentDetail, handleCreate, handleUpdate } from "../agent-management.js";
+import { discoverAgents } from "../agents.js";
 
 const tempDirs: string[] = [];
 let savedHome: string | undefined;
@@ -151,7 +151,9 @@ describe("agent management category support", () => {
 		);
 
 		expect(result.isError).toBe(false);
-		expect(result.content[0]?.text).toContain("Category 'quick-discovery' is inactive because explicit model 'anthropic/claude-sonnet-4.6' takes precedence.");
+		expect(result.content[0]?.text).toContain(
+			"Category 'quick-discovery' is inactive because explicit model 'anthropic/claude-sonnet-4.6' takes precedence.",
+		);
 	});
 
 	it("includes effective delegated route details when category routing resolves", () => {

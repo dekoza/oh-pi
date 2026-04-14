@@ -1,11 +1,11 @@
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 	ExtensionContext,
 	ModelSelectEvent,
 } from "@mariozechner/pi-coding-agent";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
 import { classifyPrompt } from "./classifier.js";
 import { getAdaptiveRoutingConfigPath, readAdaptiveRoutingConfig } from "./config.js";
 import { decideRoute } from "./engine.js";
@@ -451,7 +451,7 @@ function buildExplanationLines(decision: RouteDecision | undefined, usage: Provi
 	if (decision.explanation.cost) {
 		const selected = decision.explanation.cost.selectedMultiplier;
 		const max = decision.explanation.cost.maxMultiplier;
-		lines.push(`Multiplier: ${selected ?? "unknown"}${max !== undefined ? ` · budget ≤ ${max}` : ""}`);
+		lines.push(`Multiplier: ${selected ?? "unknown"}${max === undefined ? "" : ` · budget ≤ ${max}`}`);
 	}
 	if (decision.fallbacks.length > 0) {
 		lines.push(`Fallbacks: ${decision.fallbacks.join(" → ")}`);
@@ -459,8 +459,10 @@ function buildExplanationLines(decision: RouteDecision | undefined, usage: Provi
 	if (decision.explanation.candidates?.length) {
 		lines.push("Top candidates:");
 		for (const candidate of decision.explanation.candidates) {
-			const multiplier = candidate.multiplier !== undefined ? ` · x${candidate.multiplier}` : "";
-			lines.push(`  - ${candidate.model} (${candidate.score.toFixed(1)}${multiplier}) [${candidate.reasons.join(", ")}]`);
+			const multiplier = candidate.multiplier === undefined ? "" : ` · x${candidate.multiplier}`;
+			lines.push(
+				`  - ${candidate.model} (${candidate.score.toFixed(1)}${multiplier}) [${candidate.reasons.join(", ")}]`,
+			);
 		}
 	}
 	if (usage && Object.keys(usage.providers).length > 0) {
@@ -500,10 +502,7 @@ async function runInit(ctx: ExtensionCommandContext): Promise<void> {
 	const configPath = getAdaptiveRoutingConfigPath();
 
 	if (existsSync(configPath)) {
-		const overwrite = await ctx.ui.confirm(
-			"Config exists",
-			`${configPath} already exists. Overwrite?`,
-		);
+		const overwrite = await ctx.ui.confirm("Config exists", `${configPath} already exists. Overwrite?`);
 		if (!overwrite) {
 			ctx.ui.notify("Init cancelled.", "info");
 			return;
@@ -527,9 +526,10 @@ async function runInit(ctx: ExtensionCommandContext): Promise<void> {
 	writeFileSync(configPath, json, "utf-8");
 
 	const categoryNames = Object.keys(config.delegatedRouting.categories);
-	const summary = categoryNames.length > 0
-		? `Created ${configPath} with categories: ${categoryNames.join(", ")}`
-		: `Created ${configPath} (no models detected — add categories manually)`;
+	const summary =
+		categoryNames.length > 0
+			? `Created ${configPath} with categories: ${categoryNames.join(", ")}`
+			: `Created ${configPath} (no models detected — add categories manually)`;
 
 	ctx.ui.notify(summary, "info");
 

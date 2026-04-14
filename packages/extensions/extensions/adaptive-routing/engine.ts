@@ -52,8 +52,7 @@ export function decideRoute(input: RoutingDecisionInput): RouteDecision | undefi
 
 	const scores = candidates.map((candidate) => scoreCandidate(candidate, input));
 	scores.sort(
-		(a, b) =>
-			b.score - a.score || compareMultiplier(a.multiplier, b.multiplier) || a.model.localeCompare(b.model),
+		(a, b) => b.score - a.score || compareMultiplier(a.multiplier, b.multiplier) || a.model.localeCompare(b.model),
 	);
 	const best = scores[0];
 	if (!best) {
@@ -66,7 +65,15 @@ export function decideRoute(input: RoutingDecisionInput): RouteDecision | undefi
 	}
 
 	const selectedThinking = clampThinking(resolveRequestedThinking(config, classification), selected.maxThinkingLevel);
-	const explanation = buildExplanation(selected, selectedThinking, best, scores.slice(0, 3), classification, config, usage);
+	const explanation = buildExplanation(
+		selected,
+		selectedThinking,
+		best,
+		scores.slice(0, 3),
+		classification,
+		config,
+		usage,
+	);
 
 	return {
 		selectedModel: selected.fullId,
@@ -277,9 +284,9 @@ function buildExplanation(
 		cost:
 			typeof selectedMultiplier === "number" || typeof maxMultiplier === "number"
 				? {
-					selectedMultiplier,
-					maxMultiplier,
-				}
+						selectedMultiplier,
+						maxMultiplier,
+					}
 				: undefined,
 		candidates: topCandidates,
 	};

@@ -162,7 +162,10 @@ function matchesModelRef(reference: string, model: AvailableModelRef): boolean {
 	return normalized === model.fullId || normalized === model.id;
 }
 
-export function resolveModelFullId(modelName: string | undefined, availableModels: AvailableModelRef[]): string | undefined {
+export function resolveModelFullId(
+	modelName: string | undefined,
+	availableModels: AvailableModelRef[],
+): string | undefined {
 	if (!modelName) {
 		return undefined;
 	}
@@ -171,8 +174,8 @@ export function resolveModelFullId(modelName: string | undefined, availableModel
 	}
 
 	const colonIdx = modelName.lastIndexOf(":");
-	const baseModel = colonIdx !== -1 ? modelName.substring(0, colonIdx) : modelName;
-	const thinkingSuffix = colonIdx !== -1 ? modelName.substring(colonIdx) : "";
+	const baseModel = colonIdx === -1 ? modelName : modelName.substring(0, colonIdx);
+	const thinkingSuffix = colonIdx === -1 ? "" : modelName.substring(colonIdx);
 	const match = availableModels.find((model) => model.id === baseModel);
 	if (!match) {
 		return modelName;
@@ -186,7 +189,10 @@ function filterAvailableCandidates(
 	excludedModels: string[],
 ): string[] {
 	return candidateRefs
-		.filter((reference) => !excludedModels.some((excluded) => excluded === reference || excluded === reference.split("/").pop()))
+		.filter(
+			(reference) =>
+				!excludedModels.some((excluded) => excluded === reference || excluded === reference.split("/").pop()),
+		)
 		.map((reference) => resolveModelFullId(reference, availableModels))
 		.filter((reference): reference is string => Boolean(reference))
 		.filter((reference) => availableModels.some((model) => matchesModelRef(reference, model)));
@@ -197,7 +203,7 @@ export function resolveDelegatedCategoryRoute(
 	availableModels: AvailableModelRef[],
 	policy = readDelegatedRoutingPolicy(),
 ): DelegatedCategoryRoute | undefined {
-	if (!policy.enabled || !category) {
+	if (!(policy.enabled && category)) {
 		return undefined;
 	}
 
@@ -210,7 +216,8 @@ export function resolveDelegatedCategoryRoute(
 	const taskClass = categoryPolicy.taskClass ? policy.taskClasses[categoryPolicy.taskClass] : undefined;
 	const fallbackGroupName = categoryPolicy.fallbackGroup ?? taskClass?.fallbackGroup;
 	const fallbackGroup = fallbackGroupName ? policy.fallbackGroups[fallbackGroupName] : undefined;
-	const candidateRefs = inlineCandidates.length > 0 ? inlineCandidates : (taskClass?.candidates ?? fallbackGroup?.candidates ?? []);
+	const candidateRefs =
+		inlineCandidates.length > 0 ? inlineCandidates : (taskClass?.candidates ?? fallbackGroup?.candidates ?? []);
 	const candidateModels = filterAvailableCandidates(candidateRefs, availableModels, policy.excludedModels);
 	if (candidateModels.length === 0) {
 		return undefined;

@@ -234,11 +234,7 @@ describe("adaptive routing engine", () => {
 			config: {
 				...DEFAULT_ADAPTIVE_ROUTING_CONFIG,
 				models: {
-					ranked: [
-						"github-copilot/claude-haiku-4.5",
-						"github-copilot/gpt-5-mini",
-						"github-copilot/gpt-4.1",
-					],
+					ranked: ["github-copilot/claude-haiku-4.5", "github-copilot/gpt-5-mini", "github-copilot/gpt-4.1"],
 					excluded: [],
 				},
 				costs: {
@@ -254,21 +250,15 @@ describe("adaptive routing engine", () => {
 					"quick-qna": {
 						preferredTier: "cheap",
 						defaultThinking: "minimal",
-						preferredModels: [
-							"github-copilot/claude-haiku-4.5",
-							"github-copilot/gpt-5-mini",
-							"github-copilot/gpt-4.1",
-						],
+						preferredModels: ["github-copilot/claude-haiku-4.5", "github-copilot/gpt-5-mini", "github-copilot/gpt-4.1"],
 						maxMultiplier: 0,
 					},
 				},
 			},
 			candidates: multiplierCandidates.filter((candidate) =>
-				[
-					"github-copilot/claude-haiku-4.5",
-					"github-copilot/gpt-5-mini",
-					"github-copilot/gpt-4.1",
-				].includes(candidate.fullId),
+				["github-copilot/claude-haiku-4.5", "github-copilot/gpt-5-mini", "github-copilot/gpt-4.1"].includes(
+					candidate.fullId,
+				),
 			),
 			classification,
 		});
@@ -276,10 +266,7 @@ describe("adaptive routing engine", () => {
 		if (!decision) {
 			throw new Error("expected route decision");
 		}
-		expect([
-			"github-copilot/gpt-5-mini",
-			"github-copilot/gpt-4.1",
-		]).toContain(decision.selectedModel);
+		expect(["github-copilot/gpt-5-mini", "github-copilot/gpt-4.1"]).toContain(decision.selectedModel);
 		expect(decision.selectedModel).not.toBe("github-copilot/claude-haiku-4.5");
 		expect(decision.explanation.cost).toEqual({ selectedMultiplier: 0, maxMultiplier: 0 });
 		expect(decision.explanation.codes).toContain("cost_free_bias");
@@ -331,10 +318,7 @@ describe("adaptive routing engine", () => {
 					architecture: {
 						preferredTier: "peak",
 						defaultThinking: "xhigh",
-						preferredModels: [
-							"github-copilot/gemini-3.1-pro-preview",
-							"github-copilot/claude-sonnet-4.6",
-						],
+						preferredModels: ["github-copilot/gemini-3.1-pro-preview", "github-copilot/claude-sonnet-4.6"],
 						maxMultiplier: 1,
 					},
 				},

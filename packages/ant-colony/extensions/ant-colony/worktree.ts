@@ -61,7 +61,7 @@ function resolveExecutionCwd(worktreeRoot: string, repoRoot: string, originCwd: 
 }
 
 function describeCleanupBlocker(workspace: ColonyWorkspace): string | null {
-	if (!workspace.worktreeRoot || !workspace.repoRoot) {
+	if (!(workspace.worktreeRoot && workspace.repoRoot)) {
 		return null;
 	}
 

@@ -1,4 +1,9 @@
-import type { AdaptiveRoutingConfig, DelegatedCategoryPolicy, IntentRoutingPolicy, RouteThinkingLevel } from "./types.js";
+import type {
+	AdaptiveRoutingConfig,
+	DelegatedCategoryPolicy,
+	IntentRoutingPolicy,
+	RouteThinkingLevel,
+} from "./types.js";
 
 export interface InitModelInfo {
 	provider: string;
@@ -369,7 +374,8 @@ function buildCopilotAwareConfig(availableModels: InitModelInfo[]): GeneratedIni
 	for (const [name, policy] of Object.entries(COPILOT_DELEGATED_CATEGORIES)) {
 		const candidates = filterAvailable(policy.candidates, available);
 		categories[name] = {
-			candidates: candidates.length > 0 ? candidates : buildGenericDelegatedCategories(availableModels)[name]?.candidates,
+			candidates:
+				candidates.length > 0 ? candidates : buildGenericDelegatedCategories(availableModels)[name]?.candidates,
 			defaultThinking: policy.defaultThinking,
 		};
 	}

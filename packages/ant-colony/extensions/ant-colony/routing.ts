@@ -1,15 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import {
+	type AvailableModelRef,
 	getExtensionConfigPath,
 	resolveDelegatedCategoryRoute,
 	resolveModelFullId,
-	type AvailableModelRef,
 } from "@ifi/oh-pi-core";
 import {
-	DEFAULT_CASTE_ROUTING_CATEGORIES,
-	DEFAULT_WORKER_CLASS_ROUTING_CATEGORIES,
 	type AntCaste,
 	type AntRoutingInfo,
+	DEFAULT_CASTE_ROUTING_CATEGORIES,
+	DEFAULT_WORKER_CLASS_ROUTING_CATEGORIES,
 	type ModelOverrides,
 	type WorkerClass,
 } from "./types.js";
@@ -85,11 +85,13 @@ function resolveOverride(
 	modelOverrides: ModelOverrides | undefined,
 	availableModels: AvailableModelRef[],
 ): Pick<AntRoutingInfo, "selectedModel" | "overrideKey"> | undefined {
-	const overrideKey = workerClass && modelOverrides?.[workerClass] ? workerClass : modelOverrides?.[caste] ? caste : undefined;
+	const overrideKey =
+		workerClass && modelOverrides?.[workerClass] ? workerClass : modelOverrides?.[caste] ? caste : undefined;
 	if (!overrideKey) {
 		return undefined;
 	}
-	const selectedModel = resolveModelFullId(modelOverrides?.[overrideKey], availableModels) ?? modelOverrides?.[overrideKey];
+	const selectedModel =
+		resolveModelFullId(modelOverrides?.[overrideKey], availableModels) ?? modelOverrides?.[overrideKey];
 	if (!selectedModel) {
 		return undefined;
 	}

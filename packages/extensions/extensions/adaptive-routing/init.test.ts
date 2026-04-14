@@ -13,19 +13,55 @@ const allModels: InitModelInfo[] = [
 const copilotModels: InitModelInfo[] = [
 	{ provider: "github-copilot", id: "gpt-5-mini", name: "GPT-5 mini", reasoning: true, cost: { input: 0 } },
 	{ provider: "github-copilot", id: "gpt-4.1", name: "GPT-4.1", reasoning: false, cost: { input: 0 } },
-	{ provider: "github-copilot", id: "gemini-3-flash-preview", name: "Gemini 3 Flash", reasoning: true, cost: { input: 0.33 } },
-	{ provider: "github-copilot", id: "claude-haiku-4.5", name: "Claude Haiku 4.5", reasoning: true, cost: { input: 0.33 } },
+	{
+		provider: "github-copilot",
+		id: "gemini-3-flash-preview",
+		name: "Gemini 3 Flash",
+		reasoning: true,
+		cost: { input: 0.33 },
+	},
+	{
+		provider: "github-copilot",
+		id: "claude-haiku-4.5",
+		name: "Claude Haiku 4.5",
+		reasoning: true,
+		cost: { input: 0.33 },
+	},
 	{ provider: "github-copilot", id: "gpt-4o", name: "GPT-4o", reasoning: false, cost: { input: 0 } },
-	{ provider: "github-copilot", id: "grok-code-fast-1", name: "Grok Code Fast 1", reasoning: true, cost: { input: 0.25 } },
-	{ provider: "github-copilot", id: "claude-sonnet-4.6", name: "Claude Sonnet 4.6", reasoning: true, cost: { input: 1 } },
-	{ provider: "github-copilot", id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro", reasoning: true, cost: { input: 1 } },
+	{
+		provider: "github-copilot",
+		id: "grok-code-fast-1",
+		name: "Grok Code Fast 1",
+		reasoning: true,
+		cost: { input: 0.25 },
+	},
+	{
+		provider: "github-copilot",
+		id: "claude-sonnet-4.6",
+		name: "Claude Sonnet 4.6",
+		reasoning: true,
+		cost: { input: 1 },
+	},
+	{
+		provider: "github-copilot",
+		id: "gemini-3.1-pro-preview",
+		name: "Gemini 3.1 Pro",
+		reasoning: true,
+		cost: { input: 1 },
+	},
 	{ provider: "github-copilot", id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", reasoning: true, cost: { input: 1 } },
 	{ provider: "github-copilot", id: "gpt-5.2-codex", name: "GPT-5.2 Codex", reasoning: true, cost: { input: 1 } },
 	{ provider: "github-copilot", id: "gpt-5.3-codex", name: "GPT-5.3 Codex", reasoning: true, cost: { input: 1 } },
 	{ provider: "github-copilot", id: "gpt-5.4", name: "GPT-5.4", reasoning: true, cost: { input: 1 } },
 	{ provider: "github-copilot", id: "claude-opus-4.6", name: "Claude Opus 4.6", reasoning: true, cost: { input: 3 } },
 	{ provider: "ollama", id: "qwen3-coder:30b", name: "Qwen3 Coder 30B", reasoning: true, cost: { input: 0 } },
-	{ provider: "ollama", id: "deepseek-coder-v2:latest", name: "DeepSeek Coder V2", reasoning: true, cost: { input: 0 } },
+	{
+		provider: "ollama",
+		id: "deepseek-coder-v2:latest",
+		name: "DeepSeek Coder V2",
+		reasoning: true,
+		cost: { input: 0 },
+	},
 	{ provider: "ollama", id: "glm-4.7-flash:latest", name: "GLM 4.7 Flash", reasoning: true, cost: { input: 0 } },
 	{ provider: "ollama", id: "gemma3:12b", name: "Gemma 3 12B", reasoning: true, cost: { input: 0 } },
 ];
@@ -68,7 +104,13 @@ describe("generateDefaultConfig", () => {
 	it("prefers gemini-3.1-pro-preview for visual-engineering", () => {
 		const modelsWithGemini = [
 			...allModels,
-			{ provider: "google", id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", reasoning: true, cost: { input: 1 } },
+			{
+				provider: "google",
+				id: "gemini-3.1-pro-preview",
+				name: "Gemini 3.1 Pro Preview",
+				reasoning: true,
+				cost: { input: 1 },
+			},
 		];
 		const config = generateDefaultConfig(modelsWithGemini);
 		const visual = config.delegatedRouting.categories["visual-engineering"];

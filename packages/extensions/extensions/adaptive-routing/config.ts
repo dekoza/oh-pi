@@ -337,7 +337,7 @@ function normalizeDelegatedCategoryPolicy(
 	const taskClass = normalizeOptionalString(value.taskClass, fallback?.taskClass);
 	const fallbackGroup = normalizeOptionalString(value.fallbackGroup, fallback?.fallbackGroup);
 	const defaultThinking = normalizeOptionalThinking(value.defaultThinking, fallback?.defaultThinking);
-	if (!candidates && !taskClass && !fallbackGroup && !defaultThinking) {
+	if (!(candidates || taskClass || fallbackGroup || defaultThinking)) {
 		return fallback;
 	}
 	const result: AdaptiveRoutingConfig["delegatedRouting"]["categories"][string] = {};
