@@ -20,7 +20,7 @@ terminal.
 import * as fs from "node:fs";
 import { cpus, homedir } from "node:os";
 import * as path from "node:path";
-import { monitorEventLoopDelay, type IntervalHistogram } from "node:perf_hooks";
+import { type IntervalHistogram, monitorEventLoopDelay } from "node:perf_hooks";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import {
 	getSafeModeState,
@@ -93,12 +93,21 @@ export const DEFAULT_WATCHDOG_THRESHOLDS: WatchdogThresholds = {
 	eventLoopMaxMs: 250,
 };
 
-export type EventLoopHistogram = Pick<IntervalHistogram, "enable" | "disable" | "reset" | "mean" | "max" | "percentile">;
+export type EventLoopHistogram = Pick<
+	IntervalHistogram,
+	"enable" | "disable" | "reset" | "mean" | "max" | "percentile"
+>;
 
 const NOOP_HISTOGRAM: EventLoopHistogram = {
-	enable() {},
-	disable() {},
-	reset() {},
+	enable() {
+		// Intentionally empty: the fallback histogram has nothing to start.
+	},
+	disable() {
+		// Intentionally empty: the fallback histogram has nothing to stop.
+	},
+	reset() {
+		// Intentionally empty: the fallback histogram always stays zeroed.
+	},
 	mean: 0,
 	max: 0,
 	percentile: () => 0,
