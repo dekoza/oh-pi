@@ -222,6 +222,10 @@ The current pi session does not have a usable model selected. Fix the session mo
 
 That is a fallback path, not necessarily a bug. Ant-colony falls back to shared cwd behavior when a worktree cannot be created and records the reason.
 
+### Worktree cleanup is skipped
+
+If the isolated worktree has uncommitted changes or commits not in the base branch, ant-colony leaves the worktree in place to avoid data loss. The final report includes the worktree path so you can review and merge manually.
+
 ### Delegated routing does not change the model
 
 Check the precedence first:

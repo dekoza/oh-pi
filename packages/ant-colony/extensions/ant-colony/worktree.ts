@@ -60,9 +60,52 @@ function resolveExecutionCwd(worktreeRoot: string, repoRoot: string, originCwd: 
 	return existsSync(candidate) ? candidate : worktreeRoot;
 }
 
+function describeCleanupBlocker(workspace: ColonyWorkspace): string | null {
+	if (!workspace.worktreeRoot || !workspace.repoRoot) {
+		return null;
+	}
+
+	try {
+		const status = git(workspace.worktreeRoot, ["status", "--porcelain"]);
+		if (status.length > 0) {
+			return "worktree has uncommitted changes";
+		}
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error);
+		return `could not inspect worktree status (${reason})`;
+	}
+
+	if (workspace.branch) {
+		const baseRef = workspace.baseBranch ?? "HEAD";
+		try {
+			const count = Number.parseInt(
+				git(workspace.repoRoot, ["rev-list", "--count", `${baseRef}..${workspace.branch}`]),
+				10,
+			);
+			if (Number.isNaN(count)) {
+				return `could not compare ${workspace.branch} against ${baseRef}`;
+			}
+			if (count > 0) {
+				const suffix = count === 1 ? "commit" : "commits";
+				return `worktree branch has ${count} ${suffix} not in ${baseRef}`;
+			}
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
+			return `could not compare ${workspace.branch} against ${baseRef} (${reason})`;
+		}
+	}
+
+	return null;
+}
+
 export function cleanupIsolatedWorktree(workspace: ColonyWorkspace): string | null {
 	if (workspace.mode !== "worktree" || !workspace.repoRoot || !workspace.worktreeRoot || !workspace.branch) {
 		return null;
+	}
+
+	const blocker = describeCleanupBlocker(workspace);
+	if (blocker) {
+		return `Cleanup skipped: ${blocker}.`;
 	}
 
 	const notes: string[] = [];

@@ -3,7 +3,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { prepareColonyWorkspace, resumeColonyWorkspace } from "../extensions/ant-colony/worktree.js";
+import {	cleanupIsolatedWorktree,
+	prepareColonyWorkspace,
+	resumeColonyWorkspace,
+} from "../extensions/ant-colony/worktree.js";
 
 function sharedStorageOptions() {
 	return { mode: "shared" as const, sharedRoot: mkTempDir("colony-storage-") };
@@ -76,5 +79,63 @@ describe("worktree workspace isolation", () => {
 		const resumed = resumeColonyWorkspace({ cwd: repo, runtimeId: "c4", savedWorkspace: initial, storageOptions });
 		expect(resumed.mode).toBe("worktree");
 		expect(resumed.executionCwd).toBe(initial.executionCwd);
+	});
+
+	it("keeps worktree when uncommitted changes exist", () => {
+		const repo = mkTempDir("colony-worktree-dirty-");
+		const storageOptions = sharedStorageOptions();
+		initRepo(repo);
+
+		const workspace = prepareColonyWorkspace({ cwd: repo, runtimeId: "c4", storageOptions });
+		expect(workspace.mode).toBe("worktree");
+		if (!workspace.worktreeRoot) {
+			throw new Error("Expected worktree root to be set.");
+		}
+
+		fs.writeFileSync(path.join(workspace.executionCwd, "notes.txt"), "dirty", "utf-8");
+		const cleanup = cleanupIsolatedWorktree(workspace);
+
+		expect(cleanup).toContain("skipped");
+		expect(fs.existsSync(workspace.worktreeRoot)).toBe(true);
+	});
+
+	it("keeps worktree when branch has unmerged commits", () => {
+		const repo = mkTempDir("colony-worktree-commits-");
+		const storageOptions = sharedStorageOptions();
+		initRepo(repo);
+
+		const workspace = prepareColonyWorkspace({ cwd: repo, runtimeId: "c5", storageOptions });
+		expect(workspace.mode).toBe("worktree");
+		if (!workspace.worktreeRoot) {
+			throw new Error("Expected worktree root to be set.");
+		}
+
+		fs.writeFileSync(path.join(workspace.executionCwd, "committed.txt"), "commit", "utf-8");
+		execFileSync("git", ["-C", workspace.executionCwd, "add", "committed.txt"], { stdio: "pipe" });
+		execFileSync("git", ["-C", workspace.executionCwd, "commit", "-m", "colony commit"], {
+			stdio: "pipe",
+		});
+
+		const cleanup = cleanupIsolatedWorktree(workspace);
+
+		expect(cleanup).toContain("skipped");
+		expect(fs.existsSync(workspace.worktreeRoot)).toBe(true);
+	});
+
+	it("removes clean worktree", () => {
+		const repo = mkTempDir("colony-worktree-clean-");
+		const storageOptions = sharedStorageOptions();
+		initRepo(repo);
+
+		const workspace = prepareColonyWorkspace({ cwd: repo, runtimeId: "c6", storageOptions });
+		expect(workspace.mode).toBe("worktree");
+		if (!workspace.worktreeRoot) {
+			throw new Error("Expected worktree root to be set.");
+		}
+
+		const cleanup = cleanupIsolatedWorktree(workspace);
+
+		expect(cleanup).toContain("removed isolated worktree");
+		expect(fs.existsSync(workspace.worktreeRoot)).toBe(false);
 	});
 });
